@@ -16,6 +16,9 @@ from datetime import datetime, timedelta
 from typing import Optional
 from collections import defaultdict
 
+from dotenv import load_dotenv
+load_dotenv()  # Load .env for local development (Docker uses env_file)
+
 import razorpay
 from fastapi import FastAPI, UploadFile, File, Query, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
