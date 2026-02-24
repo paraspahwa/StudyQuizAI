@@ -12,7 +12,7 @@
 |---------|---------|-------------|
 | Branding | Generic | ⚡ StudyQuizAI with landing page |
 | Payments | ❌ None | ✅ Razorpay (UPI, cards, international) |
-| Plans | — | Monthly (₹199) / Yearly (₹1,499) / Lifetime (₹499) |
+| Plans | — | Monthly (₹199) / Yearly (₹1,499) |
 | Usage Limits | Unlimited | Free: 3/day · Pro: Unlimited |
 | Landing Page | ❌ | ✅ Full marketing page |
 | Pricing Page | ❌ | ✅ With plan comparison |

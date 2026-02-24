@@ -18,8 +18,6 @@ export default function PricingPage({ onBack, onSuccess }) {
       subscribe({ planId: MONTHLY_PLAN_ID, ...callbacks });
     } else if (selectedPlan === "yearly") {
       subscribe({ planId: YEARLY_PLAN_ID, ...callbacks });
-    } else {
-      payOnce({ amount: 49900, planType: "lifetime", ...callbacks });
     }
   };
 
@@ -39,14 +37,6 @@ export default function PricingPage({ onBack, onSuccess }) {
       period: "/year",
       features: ["Unlimited quizzes", "Priority AI processing", "Export to PDF", "Save 37%"],
       tag: "MOST POPULAR",
-    },
-    {
-      id: "lifetime",
-      name: "Lifetime",
-      price: "₹499",
-      period: "once",
-      features: ["Unlimited forever", "All future updates", "No recurring charges", "Best value"],
-      tag: "BEST VALUE",
     },
   ];
 

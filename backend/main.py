@@ -70,7 +70,7 @@ FREE_DAILY_LIMIT = 3
 class OrderRequest(BaseModel):
     amount: int  # in paise (49900 = ₹499)
     currency: str = "INR"
-    plan_type: str = "lifetime"  # lifetime | monthly | yearly
+    plan_type: str = "yearly"  # monthly | yearly
     notes: Optional[dict] = None
 
 
