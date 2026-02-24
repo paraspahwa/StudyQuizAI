@@ -6,13 +6,6 @@ __pycache__/
 venv/
 .venv/
 
-# Database files
-*.db
-*.sqlite
-*.sqlite3
-backend/data/
-backend/study_quiz_ai.db
-
 # IDE
 .vscode/
 .idea/

@@ -1,20 +1,41 @@
 version: "3.8"
 
 services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: studyquizai_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: studyquizai
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
   backend:
     build: ./backend
+    container_name: studyquizai_backend
     ports:
       - "8000:8000"
     env_file:
       - .env.example
-    restart: unless-stopped
-    volumes:
-      - ./backend/data:/app/data  # Persist SQLite database
     environment:
-      - DATABASE_URL=sqlite:///./data/study_quiz_ai.db
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/studyquizai
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
 
   frontend:
     build: ./frontend
+    container_name: studyquizai_frontend
     ports:
       - "3000:3000"
     depends_on:
@@ -22,5 +43,5 @@ services:
     restart: unless-stopped
 
 volumes:
-  backend_data:
+  postgres_data:
     driver: local

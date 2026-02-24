@@ -98,15 +98,36 @@ VITE_RAZORPAY_YEARLY_PLAN_ID=plan_yyyyy
 
 ## Local Development (without Docker)
 
-**Backend:**
+### Prerequisites
+
+- PostgreSQL 12+ installed locally
+- Python 3.9+
+- Node.js 16+
+
+### Backend Setup
+
 ```bash
+# 1. Create PostgreSQL database
+createdb studyquizai
+
+# 2. Setup Python environment
 cd backend
 python -m venv venv && source venv/bin/activate
+
+# 3. Install dependencies
 pip install -r requirements.txt
+
+# 4. Configure environment
+cp ../.env.example ../.env
+# Edit .env with your OpenAI & Razorpay keys
+# DATABASE_URL should be: postgresql://your_user:your_password@localhost/studyquizai
+
+# 5. Run backend
 uvicorn main:app --reload
 ```
 
-**Frontend:**
+### Frontend Setup
+
 ```bash
 cd frontend
 npm install
@@ -171,18 +192,42 @@ Frontend → POST /payment/verify-payment → Backend verifies signature
 
 ## Database Setup
 
-StudyQuizAI now includes SQLite database support for:
-- ✅ User authentication (registration & login)
+StudyQuizAI uses **PostgreSQL** for production-grade data persistence:
+- ✅ User authentication (registration & login with JWT)
 - ✅ Quiz history tracking
 - ✅ Usage limit tracking (daily limits for free users)
-- ✅ Payment records
+- ✅ Payment records and subscriptions
 
 ### Database Tables
 
-1. **users** — User accounts with subscription status
+1. **users** — User accounts with subscription status & daily quotas
 2. **quizzes** — Generated quizzes from PDFs
 3. **quiz_results** — User quiz attempts and scores
 4. **payments** — Payment and subscription records
+
+### Database Configuration
+
+**With Docker (Recommended):**
+```bash
+docker compose up --build
+# Automatic: PostgreSQL starts and tables are created
+```
+
+**Local Development:**
+```bash
+# 1. Install PostgreSQL (if not already installed)
+# macOS: brew install postgresql
+# Ubuntu: sudo apt install postgresql postgresql-contrib
+
+# 2. Create database
+createdb studyquizai
+
+# 3. Update .env with your connection
+DATABASE_URL=postgresql://your_user:your_password@localhost/studyquizai
+
+# 4. Run backend (auto-initializes tables)
+cd backend && uvicorn main:app --reload
+```
 
 ### Initialize Database
 
@@ -230,11 +275,11 @@ const response = await fetch('/upload-and-generate', {
 - [ ] Replace `rzp_test_` keys with `rzp_live_` keys
 - [ ] Enable international payments in Razorpay Dashboard
 - [ ] Set webhook URL: `https://yourdomain.com/payment/webhook`
-- [ ] Migrate from SQLite to PostgreSQL for production
-- [ ] Set up database backups
+- [ ] Set up database backups for PostgreSQL
 - [ ] Add user authentication tests
 - [ ] Update CORS origins in `main.py`
 - [ ] Deploy backend + frontend (Railway / Render / AWS)
+- [ ] Use strong `SECRET_KEY` in production (min 32 chars)
 
 ---
 

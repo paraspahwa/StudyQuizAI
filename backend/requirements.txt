@@ -6,5 +6,6 @@ openai
 razorpay
 python-dotenv
 sqlalchemy
+psycopg2-binary
 werkzeug
 pyjwt
