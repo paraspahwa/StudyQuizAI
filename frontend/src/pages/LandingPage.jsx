@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 
 export default function LandingPage({ onGetStarted, onViewPricing }) {
   const [hoveredFeature, setHoveredFeature] = useState(null);
+  const visualRef = useRef();
 
   const features = [
     {
@@ -36,6 +37,74 @@ export default function LandingPage({ onGetStarted, onViewPricing }) {
     },
   ];
 
+  function HeroVisual() {
+    const wrapRef = useRef();
+    const [tilt, setTilt] = useState({ x: 0, y: 0 });
+
+    useEffect(() => {
+      const el = wrapRef.current;
+      if (!el) return;
+
+      function onMove(e) {
+        const rect = el.getBoundingClientRect();
+        const cx = rect.left + rect.width / 2;
+        const cy = rect.top + rect.height / 2;
+        const dx = e.clientX - cx;
+        const dy = e.clientY - cy;
+
+        const maxTilt = 12; // degrees
+        const x = Math.max(-maxTilt, Math.min(maxTilt, (-dy / rect.height) * maxTilt));
+        const y = Math.max(-maxTilt, Math.min(maxTilt, (dx / rect.width) * maxTilt));
+        setTilt({ x, y });
+      }
+
+      function onLeave() {
+        setTilt({ x: 0, y: 0 });
+      }
+
+      el.addEventListener("mousemove", onMove);
+      el.addEventListener("mouseleave", onLeave);
+      return () => {
+        el.removeEventListener("mousemove", onMove);
+        el.removeEventListener("mouseleave", onLeave);
+      };
+    }, []);
+
+    // card transforms
+    const c1 = { transform: `rotateY(${tilt.y / 2}deg) rotateX(${tilt.x / 2}deg) translateZ(40px) translateY(-8px)` };
+    const c2 = { transform: `rotateY(${tilt.y}deg) rotateX(${tilt.x}deg) translateZ(0px) translateY(14px)` };
+    const c3 = { transform: `rotateY(${tilt.y / 1.6}deg) rotateX(${tilt.x / 1.6}deg) translateZ(-30px) translateY(42px)` };
+
+    return (
+      <div ref={wrapRef} style={styles.visualWrap}>
+        <svg viewBox="0 0 400 300" preserveAspectRatio="none" style={{position:'absolute', inset:0, zIndex:0}}>
+          <defs>
+            <linearGradient id="g1" x1="0" x2="1">
+              <stop offset="0%" stopColor="#0f766e" stopOpacity="0.12" />
+              <stop offset="60%" stopColor="#0891b2" stopOpacity="0.06" />
+            </linearGradient>
+          </defs>
+          <rect x="0" y="0" width="100%" height="100%" fill="url(#g1)" />
+        </svg>
+
+        <div style={{ ...styles.visualCard, left: 40, top: 12, zIndex: 3, ...c1 }}>
+          <div style={styles.visualTitle}>Generated Questions</div>
+          <div style={styles.visualText}>Multiple-choice questions with explanations for each option.</div>
+        </div>
+
+        <div style={{ ...styles.visualCard, left: 20, top: 62, zIndex: 4, width: 300, ...c2 }}>
+          <div style={styles.visualTitle}>Smart Summaries</div>
+          <div style={styles.visualText}>Brief concept summaries help you retain the core idea.</div>
+        </div>
+
+        <div style={{ ...styles.visualCard, left: 80, top: 142, zIndex: 2, width: 220, ...c3 }}>
+          <div style={styles.visualTitle}>Answer Sheet</div>
+          <div style={styles.visualText}>Download printable PDFs for quizzes and answers.</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={styles.page}>
       {/* Nav */}
@@ -52,20 +121,28 @@ export default function LandingPage({ onGetStarted, onViewPricing }) {
 
       {/* Hero */}
       <section style={styles.hero}>
-        <div style={styles.badge}>✨ AI-Powered Study Tool</div>
-        <h1 style={styles.heroTitle}>
-          Turn any PDF into a<br />
-          <span style={styles.heroGradient}>smart quiz in seconds</span>
-        </h1>
-        <p style={styles.heroSub}>
-          Upload your notes, textbook, or research paper. Get an instant multiple-choice quiz
-          with explanations for every answer — so you actually learn, not just guess.
-        </p>
-        <div style={styles.heroCtas}>
-          <button style={styles.ctaPrimary} onClick={onGetStarted}>
-            Generate Your First Quiz — Free
-          </button>
-          <p style={styles.ctaNote}>3 free quizzes/day · No sign-up required</p>
+        <div style={styles.heroInner}>
+          <div style={styles.heroLeft}>
+            <div style={styles.badge}>✨ AI-Powered Study Tool</div>
+            <h1 style={styles.heroTitle}>
+              Turn any PDF into a<br />
+              <span style={styles.heroGradient}>smart quiz in seconds</span>
+            </h1>
+            <p style={styles.heroSub}>
+              Upload your notes, textbook, or research paper. Get an instant multiple-choice quiz
+              with explanations for every answer — so you actually learn, not just guess.
+            </p>
+            <div style={styles.heroCtas}>
+              <button style={styles.ctaPrimary} onClick={onGetStarted}>
+                Generate Your First Quiz — Free
+              </button>
+              <p style={styles.ctaNote}>3 free quizzes/day · No sign-up required</p>
+            </div>
+          </div>
+
+          <div style={styles.heroRight}>
+            <HeroVisual />
+          </div>
         </div>
       </section>
 
@@ -175,10 +252,29 @@ const styles = {
   },
   // Hero
   hero: {
-    textAlign: "center",
     padding: "80px 24px 60px",
-    maxWidth: 720,
+    maxWidth: 1200,
     margin: "0 auto",
+  },
+  heroInner: {
+    display: "flex",
+    gap: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    flexWrap: "wrap",
+  },
+  heroLeft: {
+    flex: "1 1 420px",
+    minWidth: 300,
+    maxWidth: 640,
+    textAlign: "left",
+  },
+  heroRight: {
+    flex: "0 0 420px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 280,
   },
   badge: {
     display: "inline-block",
@@ -224,6 +320,30 @@ const styles = {
     transition: "transform 0.15s, box-shadow 0.15s",
   },
   ctaNote: { fontSize: 13, color: "#94a3b8" },
+
+  /* Hero visual cards */
+  visualWrap: {
+    width: 360,
+    height: 300,
+    perspective: 1000,
+    position: "relative",
+  },
+  visualCard: {
+    position: "absolute",
+    width: 260,
+    height: 160,
+    borderRadius: 18,
+    boxShadow: "0 20px 40px rgba(15,118,110,0.12)",
+    background: "linear-gradient(180deg, rgba(255,255,255,0.9), rgba(245,247,250,0.9))",
+    border: "1px solid rgba(15,118,110,0.06)",
+    display: "flex",
+    flexDirection: "column",
+    padding: 18,
+    transformStyle: "preserve-3d",
+    transition: "transform 0.2s ease, box-shadow 0.2s ease",
+  },
+  visualTitle: { fontSize: 14, fontWeight: 800, color: "#0f172a", marginBottom: 6 },
+  visualText: { fontSize: 12, color: "#475569" },
   // How It Works
   howSection: {
     padding: "60px 24px",
