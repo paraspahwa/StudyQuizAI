@@ -41,6 +41,70 @@ from database import init_db, get_db, User, Quiz, QuizResult, Payment
 from auth import create_access_token, get_current_user
 
 # ─────────────────────────────────────────────
+# Pydantic Models (DEFINED FIRST!)
+# ─────────────────────────────────────────────
+class RegisterRequest(BaseModel):
+    email: str
+    password: str
+    full_name: Optional[str] = None
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class AuthResponse(BaseModel):
+    access_token: str
+    user_id: int
+    email: str
+    full_name: Optional[str] = None
+
+
+class OrderRequest(BaseModel):
+    amount: int  # in paise (49900 = ₹499)
+    currency: str = "INR"
+    plan_type: str = "yearly"  # monthly | yearly
+
+
+class PaymentVerification(BaseModel):
+    razorpay_order_id: str
+    razorpay_payment_id: str
+    razorpay_signature: str
+    user_id: Optional[str] = None
+
+
+class SubscriptionRequest(BaseModel):
+    plan_id: str
+    total_count: int = 12
+    notes: Optional[dict] = None
+
+
+class SubscriptionVerification(BaseModel):
+    razorpay_subscription_id: str
+    razorpay_payment_id: str
+    razorpay_signature: str
+    user_id: Optional[str] = None
+
+
+class ScriptRequest(BaseModel):
+    topic: str
+    niche: str = "motivation"
+    duration: int = 30      # seconds: 15, 30, 60
+    voice: str = "nova"
+    style: str = "cinematic"
+
+
+class VideoCreateRequest(BaseModel):
+    topic: str
+    niche: str = "motivation"
+    duration: int = 30
+    voice: str = "nova"
+    style: str = "cinematic"
+    script: Optional[str] = None  # optional pre-generated script
+
+    
+# ─────────────────────────────────────────────
 # App Init
 # ─────────────────────────────────────────────
 app = FastAPI(title="ReelForge AI API", version="3.0.0")
