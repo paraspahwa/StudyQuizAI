@@ -14,7 +14,22 @@ DATABASE_URL = os.getenv(
     "postgresql://postgres:postgres@localhost/subtrack"
 )
 
-engine = create_engine(DATABASE_URL, echo=False)
+# Supabase uses a connection pooler (Transaction mode on port 6543).
+# SQLAlchemy requires ?pgbouncer=true to disable prepared statements
+# when using Supabase's Transaction pooler.
+# Session mode (port 5432) works without this flag.
+_connect_args = {}
+if "supabase.co" in DATABASE_URL:
+    _connect_args = {"options": "-c statement_timeout=30000"}
+
+engine = create_engine(
+    DATABASE_URL,
+    echo=False,
+    pool_pre_ping=True,       # reconnect if connection dropped
+    pool_size=5,
+    max_overflow=10,
+    connect_args=_connect_args,
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
