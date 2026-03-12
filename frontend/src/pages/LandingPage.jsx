@@ -214,8 +214,180 @@ export default function LandingPage({ onGetStarted, onLogin, onViewPricing }) {
         </div>
       </section>
 
+      {/* TECH STACK */}
+      <section style={{ padding: "80px 24px", borderTop: "1px solid var(--border2)" }}>
+        <div style={{ maxWidth: 1000, margin: "0 auto" }}>
+          <div style={{ textAlign: "center", marginBottom: 52 }}>
+            <h2 style={{ fontFamily: "'Poppins',sans-serif", fontSize: "clamp(24px,3.5vw,38px)", fontWeight: 800, marginBottom: 12 }}>
+              Built to be fast, reliable, and secure
+            </h2>
+            <p style={{ fontSize: 16, color: "var(--text3)", maxWidth: 480, margin: "0 auto" }}>
+              Production-grade stack. No vendor lock-in. Runs anywhere.
+            </p>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 20 }}>
+            {[
+              {
+                layer: "Frontend",
+                color: "#06b6d4",
+                items: [
+                  { name: "React 18", note: "Component UI" },
+                  { name: "Vite 5", note: "Build & dev server" },
+                  { name: "CSS Variables", note: "Dark theme system" },
+                ],
+              },
+              {
+                layer: "Backend",
+                color: "#7c3aed",
+                items: [
+                  { name: "FastAPI", note: "Python async API" },
+                  { name: "SQLAlchemy ORM", note: "Type-safe queries" },
+                  { name: "PyJWT + bcrypt", note: "Auth & security" },
+                ],
+              },
+              {
+                layer: "Data",
+                color: "#10b981",
+                items: [
+                  { name: "PostgreSQL 15", note: "Primary database" },
+                  { name: "JSON columns", note: "Flexible storage" },
+                  { name: "Indexed queries", note: "Fast lookups" },
+                ],
+              },
+              {
+                layer: "Infrastructure",
+                color: "#f59e0b",
+                items: [
+                  { name: "Docker Compose", note: "One-command deploy" },
+                  { name: "Nginx", note: "Static file serving" },
+                  { name: "Razorpay", note: "Payment processing" },
+                ],
+              },
+            ].map((col) => (
+              <div key={col.layer} style={{ background: "var(--card)", border: `1px solid ${col.color}22`, borderRadius: 18, padding: 24 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: col.color, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 16 }}>
+                  {col.layer}
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  {col.items.map(item => (
+                    <div key={item.name} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontSize: 14, fontWeight: 600 }}>{item.name}</span>
+                      <span style={{ fontSize: 12, color: "var(--text4)", background: "var(--bg)", padding: "3px 8px", borderRadius: 20 }}>{item.note}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* MARKET STRATEGY */}
+      <section style={{ padding: "80px 24px", background: "var(--bg2)" }}>
+        <div style={{ maxWidth: 1000, margin: "0 auto" }}>
+          <div style={{ textAlign: "center", marginBottom: 52 }}>
+            <h2 style={{ fontFamily: "'Poppins',sans-serif", fontSize: "clamp(24px,3.5vw,38px)", fontWeight: 800, marginBottom: 12 }}>
+              A massive, underserved market
+            </h2>
+            <p style={{ fontSize: 16, color: "var(--text3)", maxWidth: 520, margin: "0 auto" }}>
+              Subscription spending hit $1.8 trillion globally in 2024. Most people have no idea what they're actually paying.
+            </p>
+          </div>
+
+          {/* Market size row */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 16, marginBottom: 40 }}>
+            {[
+              { value: "$1.8T", label: "Global subscription market", color: "#7c3aed" },
+              { value: "4.2B", label: "Digital subscription users worldwide", color: "#06b6d4" },
+              { value: "47%", label: "Consumers who overpay monthly", color: "#10b981" },
+              { value: "$89", label: "Average monthly waste per user", color: "#f59e0b" },
+            ].map((s, i) => (
+              <div key={i} style={{ background: "var(--card)", borderRadius: 16, padding: "22px 20px", border: `1px solid ${s.color}22`, textAlign: "center" }}>
+                <div style={{ fontFamily: "'Poppins',sans-serif", fontSize: 32, fontWeight: 900, color: s.color, lineHeight: 1 }}>{s.value}</div>
+                <div style={{ fontSize: 13, color: "var(--text3)", marginTop: 8, lineHeight: 1.4 }}>{s.label}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Strategy columns */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 20 }}>
+            {[
+              {
+                icon: "🎯",
+                title: "Target Audience",
+                color: "#7c3aed",
+                points: [
+                  "Remote workers juggling 10+ SaaS tools",
+                  "Households with shared streaming accounts",
+                  "Freelancers tracking business vs personal subs",
+                  "Finance-conscious millennials and Gen Z",
+                ],
+              },
+              {
+                icon: "🚀",
+                title: "Go-to-Market",
+                color: "#06b6d4",
+                points: [
+                  "Free tier drives viral word-of-mouth",
+                  "SEO content: 'best subscription tracker'",
+                  "Reddit / HN launch for tech early adopters",
+                  "Personal finance YouTube & newsletter placements",
+                ],
+              },
+              {
+                icon: "💰",
+                title: "Revenue Model",
+                color: "#10b981",
+                points: [
+                  "Free: up to 10 subs — builds trust & habit",
+                  "Pro ($9/mo): unlimited + full analytics",
+                  "Annual plan discount drives LTV",
+                  "B2B teams plan (future): shared dashboards",
+                ],
+              },
+            ].map((col) => (
+              <div key={col.title} style={{ background: "var(--card)", border: `1px solid ${col.color}22`, borderRadius: 20, padding: 28 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
+                  <span style={{ fontSize: 24 }}>{col.icon}</span>
+                  <h3 style={{ fontWeight: 800, fontSize: 17, color: col.color }}>{col.title}</h3>
+                </div>
+                <ul style={{ listStyle: "none", padding: 0, display: "flex", flexDirection: "column", gap: 10 }}>
+                  {col.points.map((p, i) => (
+                    <li key={i} style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 14, color: "var(--text2)", lineHeight: 1.5 }}>
+                      <span style={{ color: col.color, fontWeight: 700, flexShrink: 0, marginTop: 1 }}>→</span>
+                      {p}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+
+          {/* Competitive moat */}
+          <div style={{ marginTop: 24, background: "var(--card)", border: "1px solid rgba(124,58,237,0.25)", borderRadius: 20, padding: 28 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+              <span style={{ fontSize: 22 }}>🏆</span>
+              <h3 style={{ fontWeight: 800, fontSize: 17 }}>Competitive Advantage</h3>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 12 }}>
+              {[
+                { label: "vs. Mint / YNAB", note: "Focused purely on subs — faster, simpler, no bank linking required" },
+                { label: "vs. Truebill / Rocket Money", note: "No upsells, no shady cancellation fees, no data brokering" },
+                { label: "vs. Spreadsheets", note: "Automatic renewal math, renewal alerts, zero maintenance overhead" },
+              ].map((c, i) => (
+                <div key={i} style={{ background: "var(--bg)", borderRadius: 12, padding: "14px 16px" }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#a78bfa", marginBottom: 6 }}>{c.label}</div>
+                  <div style={{ fontSize: 13, color: "var(--text3)", lineHeight: 1.5 }}>{c.note}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* CTA */}
-      <section style={{ padding: "80px 24px", background: "var(--bg2)", textAlign: "center" }}>
+      <section style={{ padding: "80px 24px", background: "var(--bg)", textAlign: "center" }}>
         <div style={{ maxWidth: 600, margin: "0 auto" }}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>💳</div>
           <h2 style={{ fontFamily: "'Poppins',sans-serif", fontSize: "clamp(28px,4vw,44px)", fontWeight: 900, marginBottom: 16 }}>
