@@ -26,7 +26,7 @@ export default function AuthPage({ onSuccess, onBack, initialMode = "login" }) {
 
     setLoading(true);
     try {
-      const endpoint = mode === "login" ? "/auth/login" : "/auth/register";
+      const endpoint = mode === "login" ? "/api/auth/login" : "/api/auth/register";
       const body = mode === "login"
         ? { email: form.email, password: form.password }
         : { email: form.email, password: form.password, full_name: form.fullName };
@@ -41,8 +41,8 @@ export default function AuthPage({ onSuccess, onBack, initialMode = "login" }) {
       if (!res.ok) throw new Error(data.detail || "Authentication failed");
 
       // Save token
-      localStorage.setItem("rf_token", data.access_token);
-      localStorage.setItem("rf_user", JSON.stringify({ id: data.user_id, email: data.email, name: data.full_name }));
+      localStorage.setItem("st_token", data.access_token);
+      localStorage.setItem("st_user", JSON.stringify({ id: data.user_id, email: data.email, name: data.full_name, plan: data.plan }));
 
       onSuccess(data);
     } catch (err) {
@@ -77,8 +77,8 @@ export default function AuthPage({ onSuccess, onBack, initialMode = "login" }) {
         <div style={{ background:"var(--card)",border:"1px solid var(--border2)",borderRadius:24,padding:"40px 36px",boxShadow:"0 24px 80px rgba(0,0,0,0.4)" }}>
           {/* Logo */}
           <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:32,justifyContent:"center" }}>
-            <span style={{ fontSize:28 }}>🎬</span>
-            <span style={{ fontFamily:"'Poppins',sans-serif",fontWeight:800,fontSize:22,background:"linear-gradient(135deg,#a78bfa,#ec4899)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent" }}>ReelForge AI</span>
+            <span style={{ fontSize:28 }}>💳</span>
+            <span style={{ fontFamily:"'Poppins',sans-serif",fontWeight:800,fontSize:22,background:"linear-gradient(135deg,#a78bfa,#06b6d4)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent" }}>SubTrack</span>
           </div>
 
           {/* Mode tabs */}
@@ -97,10 +97,10 @@ export default function AuthPage({ onSuccess, onBack, initialMode = "login" }) {
 
           {/* Title */}
           <h1 style={{ fontFamily:"'Poppins',sans-serif",fontSize:24,fontWeight:800,marginBottom:8,textAlign:"center" }}>
-            {mode === "login" ? "Welcome back 👋" : "Start creating for free 🚀"}
+            {mode === "login" ? "Welcome back 👋" : "Start tracking for free 🚀"}
           </h1>
           <p style={{ fontSize:14,color:"var(--text3)",marginBottom:28,textAlign:"center" }}>
-            {mode === "login" ? "Log in to your ReelForge account" : "Create your free account — no credit card needed"}
+            {mode === "login" ? "Log in to your SubTrack account" : "Create your free account — no credit card needed"}
           </p>
 
           {/* Error */}

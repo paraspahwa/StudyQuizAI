@@ -1,534 +1,546 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
-const NICHES = [
-  { id:"motivation",label:"💪 Motivation",color:"#7c3aed" },
-  { id:"finance",label:"💰 Finance",color:"#10b981" },
-  { id:"education",label:"🧠 Education",color:"#06b6d4" },
-  { id:"health",label:"🏃 Health",color:"#f59e0b" },
-  { id:"comedy",label:"😄 Comedy",color:"#ec4899" },
-  { id:"news",label:"📰 News",color:"#64748b" },
-  { id:"technology",label:"💻 Technology",color:"#a78bfa" },
-  { id:"cooking",label:"🍳 Cooking",color:"#f97316" },
-  { id:"travel",label:"✈️ Travel",color:"#06b6d4" },
-  { id:"business",label:"📊 Business",color:"#10b981" },
+const CATEGORIES = ["Entertainment", "Productivity", "Health & Fitness", "Education", "Finance", "Shopping", "Gaming", "News & Media", "Cloud Storage", "Other"];
+
+const CATEGORY_COLORS = {
+  "Entertainment": "#e50914",
+  "Productivity": "#6e40c9",
+  "Health & Fitness": "#10b981",
+  "Education": "#f59e0b",
+  "Finance": "#06b6d4",
+  "Shopping": "#ec4899",
+  "Gaming": "#8b5cf6",
+  "News & Media": "#3b82f6",
+  "Cloud Storage": "#64748b",
+  "Other": "#475569",
+};
+
+const BILLING_CYCLES = [
+  { value: "monthly", label: "Monthly" },
+  { value: "yearly", label: "Yearly" },
+  { value: "weekly", label: "Weekly" },
 ];
 
-const VOICES = [
-  { id:"alloy",label:"Alloy",desc:"Neutral, balanced",gender:"⚧" },
-  { id:"nova",label:"Nova",desc:"Warm, friendly",gender:"♀" },
-  { id:"echo",label:"Echo",desc:"Deep, authoritative",gender:"♂" },
-  { id:"shimmer",label:"Shimmer",desc:"Bright, energetic",gender:"♀" },
-  { id:"onyx",label:"Onyx",desc:"Strong, confident",gender:"♂" },
-  { id:"fable",label:"Fable",desc:"Storytelling tone",gender:"⚧" },
-];
-
-const DURATIONS = [
-  { id:"15",label:"15 sec",desc:"Quick & punchy" },
-  { id:"30",label:"30 sec",desc:"Standard Reel" },
-  { id:"60",label:"60 sec",desc:"Full story" },
-];
-
-const STYLES = [
-  { id:"cinematic",label:"🎬 Cinematic",color:"#7c3aed" },
-  { id:"minimalist",label:"⬜ Minimalist",color:"#64748b" },
-  { id:"bold",label:"🔥 Bold",color:"#ec4899" },
-  { id:"retro",label:"📼 Retro",color:"#f59e0b" },
-  { id:"neon",label:"💜 Neon",color:"#a78bfa" },
-];
-
-const MOCK_VIDEOS = [
-  { id:1,topic:"5 Habits of Millionaires",niche:"finance",duration:"60",status:"ready",views:"142K",createdAt:"2 hours ago",thumb:"💰",color:"#10b981" },
-  { id:2,topic:"Morning Routine for Success",niche:"motivation",duration:"30",status:"ready",views:"89K",createdAt:"5 hours ago",thumb:"💪",color:"#7c3aed" },
-  { id:3,topic:"How AI is Changing Everything",niche:"technology",duration:"60",status:"ready",views:"214K",createdAt:"Yesterday",thumb:"🤖",color:"#a78bfa" },
-  { id:4,topic:"The Truth About Intermittent Fasting",niche:"health",duration:"30",status:"ready",views:"56K",createdAt:"2 days ago",thumb:"🏃",color:"#f59e0b" },
-  { id:5,topic:"Top 10 Travel Hacks That Save Money",niche:"travel",duration:"60",status:"processing",views:"—",createdAt:"Just now",thumb:"✈️",color:"#06b6d4" },
-  { id:6,topic:"Crypto Bull Run Predictions 2026",niche:"finance",duration:"30",status:"ready",views:"310K",createdAt:"3 days ago",thumb:"📈",color:"#10b981" },
-];
-
-function Sidebar({ active, onNav, user, onLogout }) {
-  const navItems = [
-    { id:"create",icon:"✨",label:"Create Video" },
-    { id:"videos",icon:"🎬",label:"My Videos" },
-    { id:"analytics",icon:"📊",label:"Analytics" },
-    { id:"schedule",icon:"📅",label:"Schedule" },
-    { id:"settings",icon:"⚙️",label:"Settings" },
-  ];
-
-  return (
-    <aside style={{
-      width: 220, flexShrink: 0, background: "var(--bg2)",
-      borderRight: "1px solid var(--border2)", display: "flex",
-      flexDirection: "column", height: "100vh", position: "sticky", top: 0,
-    }}>
-      {/* Logo */}
-      <div style={{ padding:"24px 20px",borderBottom:"1px solid var(--border2)",display:"flex",alignItems:"center",gap:10 }}>
-        <span style={{ fontSize:22 }}>🎬</span>
-        <span style={{ fontFamily:"'Poppins',sans-serif",fontWeight:800,fontSize:16,background:"linear-gradient(135deg,#a78bfa,#ec4899)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent" }}>ReelForge AI</span>
-      </div>
-
-      {/* Nav */}
-      <nav style={{ padding:"16px 12px",flex:1,display:"flex",flexDirection:"column",gap:4 }}>
-        {navItems.map(item => (
-          <button key={item.id} onClick={() => onNav(item.id)} style={{
-            display:"flex",alignItems:"center",gap:12,padding:"11px 12px",borderRadius:10,
-            background:active===item.id ? "linear-gradient(135deg,rgba(124,58,237,0.2),rgba(236,72,153,0.15))" : "transparent",
-            border:active===item.id ? "1px solid rgba(124,58,237,0.3)" : "1px solid transparent",
-            color:active===item.id ? "#a78bfa" : "var(--text3)",
-            fontSize:14,fontWeight:active===item.id ? 600 : 500,
-            cursor:"pointer",transition:"all 0.2s",
-          }}
-            onMouseOver={e=>{ if(active!==item.id){ e.currentTarget.style.background="rgba(255,255,255,0.04)";e.currentTarget.style.color="#fff"; }}}
-            onMouseOut={e=>{ if(active!==item.id){ e.currentTarget.style.background="transparent";e.currentTarget.style.color="var(--text3)"; }}}>
-            <span style={{ fontSize:16 }}>{item.icon}</span>
-            {item.label}
-          </button>
-        ))}
-      </nav>
-
-      {/* Plan badge */}
-      <div style={{ margin:"0 12px 12px",background:"linear-gradient(135deg,rgba(124,58,237,0.15),rgba(236,72,153,0.1))",border:"1px solid rgba(124,58,237,0.3)",borderRadius:12,padding:"14px 12px" }}>
-        <div style={{ fontSize:12,fontWeight:700,color:"#a78bfa",marginBottom:6 }}>FREE PLAN</div>
-        <div style={{ fontSize:12,color:"var(--text3)",marginBottom:12 }}>3 of 5 videos used this month</div>
-        <div style={{ height:5,background:"rgba(255,255,255,0.1)",borderRadius:3,marginBottom:12,overflow:"hidden" }}>
-          <div style={{ width:"60%",height:"100%",background:"linear-gradient(90deg,#7c3aed,#ec4899)",borderRadius:3 }} />
-        </div>
-        <button style={{ width:"100%",background:"linear-gradient(135deg,#7c3aed,#ec4899)",color:"#fff",border:"none",borderRadius:8,padding:"9px",fontWeight:700,fontSize:12,cursor:"pointer" }}>
-          ⚡ Upgrade to Pro
-        </button>
-      </div>
-
-      {/* User */}
-      <div style={{ padding:"16px 20px",borderTop:"1px solid var(--border2)",display:"flex",alignItems:"center",gap:12 }}>
-        <div style={{ width:34,height:34,borderRadius:"50%",background:"linear-gradient(135deg,#7c3aed,#ec4899)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,color:"#fff",flexShrink:0 }}>
-          {(user?.name || user?.email || "U")[0].toUpperCase()}
-        </div>
-        <div style={{ flex:1,minWidth:0 }}>
-          <div style={{ fontSize:13,fontWeight:600,color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{user?.name || "Creator"}</div>
-          <div style={{ fontSize:11,color:"var(--text4)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{user?.email}</div>
-        </div>
-        <button onClick={onLogout} style={{ background:"none",border:"none",cursor:"pointer",fontSize:14,color:"var(--text4)",flexShrink:0,padding:4 }} title="Log out">⎋</button>
-      </div>
-    </aside>
-  );
+function authHeaders() {
+  const token = localStorage.getItem("st_token");
+  return { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
 }
 
-function CreatePanel({ onGenerated }) {
-  const [topic, setTopic] = useState("");
-  const [niche, setNiche] = useState("motivation");
-  const [duration, setDuration] = useState("30");
-  const [voice, setVoice] = useState("nova");
-  const [style, setStyle] = useState("cinematic");
-  const [step, setStep] = useState("form"); // form | generating | done
-  const [generatedScript, setGeneratedScript] = useState("");
-  const [progress, setProgress] = useState(0);
+function daysUntil(dateStr) {
+  if (!dateStr) return null;
+  const diff = new Date(dateStr) - new Date();
+  return Math.ceil(diff / (1000 * 60 * 60 * 24));
+}
 
-  const handleGenerate = async () => {
-    if (!topic.trim()) return;
-    setStep("generating");
-    setProgress(0);
+function formatCurrency(amount, currency = "USD") {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
+}
 
-    // Simulate generation progress
-    const interval = setInterval(() => {
-      setProgress(p => {
-        if (p >= 95) { clearInterval(interval); return 95; }
-        return p + Math.random() * 8;
-      });
-    }, 300);
+// ─── Add/Edit Modal ───────────────────────────────────────────────────────────
+function SubModal({ sub, onClose, onSaved }) {
+  const isEdit = Boolean(sub?.id);
+  const today = new Date().toISOString().split("T")[0];
 
+  const [form, setForm] = useState({
+    name: sub?.name || "",
+    category: sub?.category || "Entertainment",
+    amount: sub?.amount || "",
+    currency: sub?.currency || "USD",
+    billing_cycle: sub?.billing_cycle || "monthly",
+    next_billing_date: sub?.next_billing_date ? sub.next_billing_date.split("T")[0] : today,
+    notes: sub?.notes || "",
+    color: sub?.color || CATEGORY_COLORS["Entertainment"],
+    is_active: sub?.is_active !== undefined ? sub.is_active : true,
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setForm(prev => {
+      const next = { ...prev, [name]: type === "checkbox" ? checked : value };
+      if (name === "category") next.color = CATEGORY_COLORS[value] || "#475569";
+      return next;
+    });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    if (!form.name.trim()) return setError("Name is required.");
+    if (!form.amount || isNaN(form.amount) || Number(form.amount) <= 0) return setError("Enter a valid amount.");
+    setLoading(true);
     try {
-      const token = localStorage.getItem("rf_token");
-      const res = await fetch(`${API}/videos/generate-script`, {
-        method: "POST",
-        headers: { "Content-Type":"application/json", Authorization:`Bearer ${token}` },
-        body: JSON.stringify({ topic, niche, duration: parseInt(duration), voice, style }),
-      });
-
-      let script;
-      if (res.ok) {
-        const data = await res.json();
-        script = data.script;
-      } else {
-        // Fallback mock script
-        script = generateMockScript(topic, niche);
-      }
-
-      clearInterval(interval);
-      setProgress(100);
-      setTimeout(() => {
-        setGeneratedScript(script);
-        setStep("done");
-        onGenerated && onGenerated({ topic, niche, duration, voice, style, script });
-      }, 400);
-    } catch {
-      clearInterval(interval);
-      const script = generateMockScript(topic, niche);
-      setProgress(100);
-      setTimeout(() => {
-        setGeneratedScript(script);
-        setStep("done");
-      }, 400);
+      const url = isEdit ? `${API}/api/subscriptions/${sub.id}` : `${API}/api/subscriptions`;
+      const method = isEdit ? "PUT" : "POST";
+      const res = await fetch(url, { method, headers: authHeaders(), body: JSON.stringify({ ...form, amount: parseFloat(form.amount) }) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Failed to save");
+      onSaved(data);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleReset = () => {
-    setStep("form");
-    setGeneratedScript("");
-    setProgress(0);
-  };
-
-  if (step === "generating") {
-    return (
-      <div style={{ display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"60vh",gap:32,textAlign:"center" }}>
-        <div style={{
-          width:120,height:120,borderRadius:"50%",
-          background:"linear-gradient(135deg,rgba(124,58,237,0.2),rgba(236,72,153,0.2))",
-          border:"3px solid rgba(124,58,237,0.4)",
-          display:"flex",alignItems:"center",justifyContent:"center",
-          fontSize:48,
-          animation:"float 2s ease-in-out infinite",
-        }}>⚡</div>
-        <div>
-          <h2 style={{ fontFamily:"'Poppins',sans-serif",fontSize:26,fontWeight:800,marginBottom:12 }}>Generating Your Video...</h2>
-          <p style={{ color:"var(--text3)",fontSize:15,marginBottom:32 }}>AI is writing script, selecting visuals, adding voiceover...</p>
-          <div style={{ width:320,height:6,background:"rgba(255,255,255,0.1)",borderRadius:3,overflow:"hidden",margin:"0 auto" }}>
-            <div style={{ height:"100%",background:"linear-gradient(90deg,#7c3aed,#ec4899)",borderRadius:3,width:`${progress}%`,transition:"width 0.3s ease" }} />
-          </div>
-          <div style={{ marginTop:10,fontSize:13,color:"var(--text4)" }}>{Math.round(progress)}% complete</div>
-        </div>
-        {[
-          [10,"✍️ Writing viral script..."],
-          [35,"🎙️ Generating voiceover..."],
-          [60,"🎬 Selecting visuals..."],
-          [80,"🎵 Adding background music..."],
-          [92,"✨ Rendering final video..."],
-        ].map(([threshold, label]) => (
-          <div key={label} style={{ display:"flex",alignItems:"center",gap:10,opacity:progress>=threshold?1:0.3,transition:"opacity 0.3s",fontSize:14,color:progress>=threshold?"#a78bfa":"var(--text4)" }}>
-            <span style={{ fontSize:11 }}>{progress>=threshold?"✅":"⏳"}</span>{label}
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  if (step === "done") {
-    return (
-      <div style={{ maxWidth:700,margin:"0 auto" }}>
-        <div style={{ textAlign:"center",marginBottom:32 }}>
-          <div style={{ fontSize:64,marginBottom:16 }}>🎉</div>
-          <h2 style={{ fontFamily:"'Poppins',sans-serif",fontSize:28,fontWeight:800,marginBottom:8 }}>Video Ready!</h2>
-          <p style={{ color:"var(--text3)",fontSize:15 }}>Your AI video has been generated successfully</p>
-        </div>
-
-        {/* Video preview mockup */}
-        <div style={{ background:"var(--card)",border:"1px solid var(--border2)",borderRadius:20,overflow:"hidden",marginBottom:24 }}>
-          <div style={{ background:"linear-gradient(135deg,#1a0a40,#0a0a1a)",height:200,display:"flex",alignItems:"center",justifyContent:"center",position:"relative" }}>
-            <div style={{ textAlign:"center" }}>
-              <div style={{ fontSize:48,marginBottom:8 }}>{NICHES.find(n=>n.id===niche)?.label.split(" ")[0]}</div>
-              <div style={{ fontSize:13,color:"var(--text3)",background:"rgba(0,0,0,0.5)",padding:"6px 14px",borderRadius:20 }}>{topic}</div>
-            </div>
-            <div style={{ position:"absolute",bottom:16,right:16,background:"rgba(0,0,0,0.7)",color:"#fff",fontSize:11,fontWeight:700,padding:"4px 10px",borderRadius:6 }}>AI GENERATED · {duration}s</div>
-          </div>
-          <div style={{ padding:24 }}>
-            <div style={{ fontSize:13,fontWeight:600,color:"var(--text3)",marginBottom:10,textTransform:"uppercase",letterSpacing:"0.06em" }}>Generated Script</div>
-            <div style={{ fontSize:14,color:"var(--text2)",lineHeight:1.8,background:"var(--bg)",borderRadius:10,padding:16,maxHeight:160,overflowY:"auto",fontFamily:"monospace",fontSize:13 }}>
-              {generatedScript}
-            </div>
-          </div>
-        </div>
-
-        {/* Actions */}
-        <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12 }}>
-          <button style={{ background:"linear-gradient(135deg,#7c3aed,#ec4899)",color:"#fff",border:"none",borderRadius:12,padding:"14px",fontWeight:700,fontSize:15,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8 }}>
-            ⬇️ Download HD Video
-          </button>
-          <button style={{ background:"var(--card)",color:"var(--text)",border:"1px solid var(--border2)",borderRadius:12,padding:"14px",fontWeight:600,fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8 }}>
-            📤 Publish to Socials
-          </button>
-        </div>
-        <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
-          <button style={{ background:"var(--card)",color:"var(--text)",border:"1px solid var(--border2)",borderRadius:12,padding:"12px",fontWeight:600,fontSize:14,cursor:"pointer" }}>
-            ✏️ Edit Script
-          </button>
-          <button onClick={handleReset} style={{ background:"var(--card)",color:"var(--text)",border:"1px solid var(--border2)",borderRadius:12,padding:"12px",fontWeight:600,fontSize:14,cursor:"pointer" }}>
-            + Create Another
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const inputStyle = { width: "100%", background: "var(--bg)", border: "1px solid var(--border2)", color: "var(--text)", borderRadius: 10, padding: "11px 14px", fontSize: 14, transition: "border-color 0.2s" };
+  const labelStyle = { display: "block", fontSize: 12, fontWeight: 600, color: "var(--text3)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" };
 
   return (
-    <div style={{ maxWidth:720,margin:"0 auto" }}>
-      <div style={{ marginBottom:32 }}>
-        <h1 style={{ fontFamily:"'Poppins',sans-serif",fontSize:28,fontWeight:800,marginBottom:8 }}>Create New Video ✨</h1>
-        <p style={{ color:"var(--text3)",fontSize:15 }}>Fill in the details below and our AI will generate your viral video in seconds.</p>
-      </div>
-
-      <div style={{ display:"flex",flexDirection:"column",gap:28 }}>
-        {/* Topic */}
-        <div style={{ background:"var(--card)",border:"1px solid var(--border2)",borderRadius:16,padding:24 }}>
-          <label style={{ display:"block",fontSize:13,fontWeight:600,color:"var(--text3)",marginBottom:10,textTransform:"uppercase",letterSpacing:"0.06em" }}>Video Topic *</label>
-          <textarea
-            value={topic} onChange={e=>setTopic(e.target.value)}
-            placeholder="E.g. 5 Habits That Made Me a Millionaire, Why Most People Stay Broke, The Truth About Intermittent Fasting..."
-            style={{ width:"100%",background:"var(--bg)",border:"1px solid var(--border2)",color:"var(--text)",borderRadius:10,padding:"13px 16px",fontSize:15,resize:"vertical",minHeight:88,lineHeight:1.6,transition:"border-color 0.2s",fontFamily:"inherit" }}
-            onFocus={e=>{ e.target.style.borderColor="var(--primary)";e.target.style.boxShadow="0 0 0 3px rgba(124,58,237,0.15)"; }}
-            onBlur={e=>{ e.target.style.borderColor="var(--border2)";e.target.style.boxShadow="none"; }}
-          />
-          <div style={{ fontSize:12,color:"var(--text4)",marginTop:8 }}>💡 Tip: Be specific for better results — "5 habits" works better than "habits"</div>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(8px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={e => e.target === e.currentTarget && onClose()}>
+      <div style={{ background: "var(--card)", border: "1px solid var(--border2)", borderRadius: 24, padding: 36, width: "100%", maxWidth: 520, maxHeight: "90vh", overflowY: "auto", boxShadow: "0 32px 80px rgba(0,0,0,0.5)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
+          <h2 style={{ fontFamily: "'Poppins',sans-serif", fontWeight: 800, fontSize: 20 }}>
+            {isEdit ? "Edit Subscription" : "Add Subscription"}
+          </h2>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: "var(--text3)", fontSize: 22, cursor: "pointer", lineHeight: 1, padding: 4 }}>×</button>
         </div>
 
-        {/* Niche */}
-        <div style={{ background:"var(--card)",border:"1px solid var(--border2)",borderRadius:16,padding:24 }}>
-          <label style={{ display:"block",fontSize:13,fontWeight:600,color:"var(--text3)",marginBottom:14,textTransform:"uppercase",letterSpacing:"0.06em" }}>Niche</label>
-          <div style={{ display:"flex",flexWrap:"wrap",gap:10 }}>
-            {NICHES.map(n => (
-              <button key={n.id} onClick={() => setNiche(n.id)} style={{
-                padding:"8px 16px",borderRadius:100,fontSize:13,fontWeight:600,
-                background:niche===n.id ? n.color+"25" : "var(--bg)",
-                border:`1px solid ${niche===n.id ? n.color+"60" : "var(--border2)"}`,
-                color:niche===n.id ? n.color : "var(--text3)",
-                cursor:"pointer",transition:"all 0.18s",
-              }}>
-                {n.label}
-              </button>
-            ))}
-          </div>
-        </div>
+        {error && <div style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 10, padding: "10px 14px", marginBottom: 20, fontSize: 13, color: "#fca5a5" }}>⚠️ {error}</div>}
 
-        {/* Duration + Voice + Style */}
-        <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:16 }}>
-          {/* Duration */}
-          <div style={{ background:"var(--card)",border:"1px solid var(--border2)",borderRadius:16,padding:20 }}>
-            <label style={{ display:"block",fontSize:13,fontWeight:600,color:"var(--text3)",marginBottom:12,textTransform:"uppercase",letterSpacing:"0.06em" }}>Duration</label>
-            <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
-              {DURATIONS.map(d => (
-                <label key={d.id} style={{ display:"flex",alignItems:"center",gap:10,cursor:"pointer",padding:"10px 12px",borderRadius:10,background:duration===d.id?"rgba(124,58,237,0.1)":"transparent",border:`1px solid ${duration===d.id?"rgba(124,58,237,0.3)":"transparent"}`,transition:"all 0.18s" }}>
-                  <input type="radio" name="duration" value={d.id} checked={duration===d.id} onChange={()=>setDuration(d.id)} style={{ accentColor:"#7c3aed" }} />
-                  <div>
-                    <div style={{ fontSize:14,fontWeight:600,color:duration===d.id?"#a78bfa":"var(--text)" }}>{d.label}</div>
-                    <div style={{ fontSize:12,color:"var(--text4)" }}>{d.desc}</div>
-                  </div>
-                </label>
-              ))}
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+            <div style={{ gridColumn: "1 / -1" }}>
+              <label style={labelStyle}>Service Name *</label>
+              <input name="name" value={form.name} onChange={handleChange} placeholder="e.g. Netflix" style={inputStyle}
+                onFocus={e => { e.target.style.borderColor = "var(--primary)"; e.target.style.boxShadow = "0 0 0 3px rgba(124,58,237,0.15)"; }}
+                onBlur={e => { e.target.style.borderColor = "var(--border2)"; e.target.style.boxShadow = "none"; }} />
             </div>
-          </div>
 
-          {/* Voice */}
-          <div style={{ background:"var(--card)",border:"1px solid var(--border2)",borderRadius:16,padding:20 }}>
-            <label style={{ display:"block",fontSize:13,fontWeight:600,color:"var(--text3)",marginBottom:12,textTransform:"uppercase",letterSpacing:"0.06em" }}>AI Voice</label>
-            <div style={{ display:"flex",flexDirection:"column",gap:6 }}>
-              {VOICES.map(v => (
-                <label key={v.id} style={{ display:"flex",alignItems:"center",gap:10,cursor:"pointer",padding:"8px 10px",borderRadius:8,background:voice===v.id?"rgba(124,58,237,0.1)":"transparent",border:`1px solid ${voice===v.id?"rgba(124,58,237,0.3)":"transparent"}`,transition:"all 0.18s" }}>
-                  <input type="radio" name="voice" value={v.id} checked={voice===v.id} onChange={()=>setVoice(v.id)} style={{ accentColor:"#7c3aed" }} />
-                  <span style={{ fontSize:13,color:"var(--text4)" }}>{v.gender}</span>
-                  <div>
-                    <div style={{ fontSize:13,fontWeight:600,color:voice===v.id?"#a78bfa":"var(--text)" }}>{v.label}</div>
-                    <div style={{ fontSize:11,color:"var(--text4)" }}>{v.desc}</div>
-                  </div>
-                </label>
-              ))}
+            <div>
+              <label style={labelStyle}>Amount *</label>
+              <input name="amount" type="number" step="0.01" min="0.01" value={form.amount} onChange={handleChange} placeholder="9.99" style={inputStyle}
+                onFocus={e => { e.target.style.borderColor = "var(--primary)"; e.target.style.boxShadow = "0 0 0 3px rgba(124,58,237,0.15)"; }}
+                onBlur={e => { e.target.style.borderColor = "var(--border2)"; e.target.style.boxShadow = "none"; }} />
             </div>
-          </div>
-        </div>
 
-        {/* Visual Style */}
-        <div style={{ background:"var(--card)",border:"1px solid var(--border2)",borderRadius:16,padding:24 }}>
-          <label style={{ display:"block",fontSize:13,fontWeight:600,color:"var(--text3)",marginBottom:14,textTransform:"uppercase",letterSpacing:"0.06em" }}>Visual Style</label>
-          <div style={{ display:"flex",gap:10,flexWrap:"wrap" }}>
-            {STYLES.map(s => (
-              <button key={s.id} onClick={() => setStyle(s.id)} style={{
-                padding:"10px 18px",borderRadius:12,fontSize:13,fontWeight:600,
-                background:style===s.id ? s.color+"20" : "var(--bg)",
-                border:`1px solid ${style===s.id ? s.color+"50" : "var(--border2)"}`,
-                color:style===s.id ? s.color : "var(--text3)",
-                cursor:"pointer",transition:"all 0.18s",
-              }}>
-                {s.label}
-              </button>
-            ))}
-          </div>
-        </div>
+            <div>
+              <label style={labelStyle}>Currency</label>
+              <select name="currency" value={form.currency} onChange={handleChange} style={inputStyle}>
+                {["USD", "EUR", "GBP", "INR", "CAD", "AUD"].map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
 
-        {/* Generate Button */}
-        <button onClick={handleGenerate} disabled={!topic.trim()} style={{
-          width:"100%",
-          background: !topic.trim() ? "rgba(124,58,237,0.3)" : "linear-gradient(135deg,#7c3aed,#ec4899)",
-          color:"#fff",border:"none",borderRadius:14,padding:"18px",
-          fontWeight:800,fontSize:18,cursor:!topic.trim()?"not-allowed":"pointer",
-          boxShadow:topic.trim()?"0 6px 28px rgba(124,58,237,0.45)":"none",
-          transition:"all 0.2s",display:"flex",alignItems:"center",justifyContent:"center",gap:10,
-        }}
-          onMouseOver={e=>{ if(topic.trim()){ e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 12px 36px rgba(124,58,237,0.6)"; }}}
-          onMouseOut={e=>{ e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow=topic.trim()?"0 6px 28px rgba(124,58,237,0.45)":"none"; }}>
-          ⚡ Generate Video in 60 Seconds
-        </button>
+            <div>
+              <label style={labelStyle}>Billing Cycle</label>
+              <select name="billing_cycle" value={form.billing_cycle} onChange={handleChange} style={inputStyle}>
+                {BILLING_CYCLES.map(b => <option key={b.value} value={b.value}>{b.label}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label style={labelStyle}>Next Billing Date</label>
+              <input name="next_billing_date" type="date" value={form.next_billing_date} onChange={handleChange} style={inputStyle}
+                onFocus={e => { e.target.style.borderColor = "var(--primary)"; e.target.style.boxShadow = "0 0 0 3px rgba(124,58,237,0.15)"; }}
+                onBlur={e => { e.target.style.borderColor = "var(--border2)"; e.target.style.boxShadow = "none"; }} />
+            </div>
+
+            <div style={{ gridColumn: "1 / -1" }}>
+              <label style={labelStyle}>Category</label>
+              <select name="category" value={form.category} onChange={handleChange} style={inputStyle}>
+                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+
+            <div style={{ gridColumn: "1 / -1" }}>
+              <label style={labelStyle}>Notes (optional)</label>
+              <textarea name="notes" value={form.notes} onChange={handleChange} placeholder="Any notes..." rows={2}
+                style={{ ...inputStyle, resize: "vertical", minHeight: 64 }}
+                onFocus={e => { e.target.style.borderColor = "var(--primary)"; e.target.style.boxShadow = "0 0 0 3px rgba(124,58,237,0.15)"; }}
+                onBlur={e => { e.target.style.borderColor = "var(--border2)"; e.target.style.boxShadow = "none"; }} />
+            </div>
+
+            {isEdit && (
+              <div style={{ gridColumn: "1 / -1", display: "flex", alignItems: "center", gap: 10 }}>
+                <input name="is_active" type="checkbox" checked={form.is_active} onChange={handleChange} id="is_active" style={{ width: 16, height: 16, accentColor: "var(--primary)", cursor: "pointer" }} />
+                <label htmlFor="is_active" style={{ fontSize: 14, color: "var(--text2)", cursor: "pointer" }}>Active subscription</label>
+              </div>
+            )}
+          </div>
+
+          <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
+            <button type="button" onClick={onClose} style={{ flex: 1, background: "var(--bg)", color: "var(--text3)", border: "1px solid var(--border2)", borderRadius: 12, padding: "13px", fontSize: 15, fontWeight: 600, cursor: "pointer" }}>
+              Cancel
+            </button>
+            <button type="submit" disabled={loading} style={{ flex: 2, background: loading ? "rgba(124,58,237,0.5)" : "linear-gradient(135deg,#7c3aed,#06b6d4)", color: "#fff", border: "none", borderRadius: 12, padding: "13px", fontSize: 15, fontWeight: 700, cursor: loading ? "not-allowed" : "pointer", boxShadow: "0 4px 16px rgba(124,58,237,0.4)", transition: "all 0.2s" }}>
+              {loading ? "Saving..." : isEdit ? "Save Changes" : "Add Subscription"}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
 }
 
-function VideoGallery() {
-  const [filter, setFilter] = useState("all");
-  const videos = MOCK_VIDEOS;
-  const filtered = filter === "all" ? videos : videos.filter(v => v.status === filter);
+// ─── Subscription Card ────────────────────────────────────────────────────────
+function SubCard({ sub, onEdit, onDelete, onToggle }) {
+  const days = daysUntil(sub.next_billing_date);
+  const catColor = sub.color || CATEGORY_COLORS[sub.category] || "#475569";
+  const isUrgent = days !== null && days <= 7;
+  const isOverdue = days !== null && days < 0;
 
   return (
-    <div>
-      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:28,flexWrap:"wrap",gap:14 }}>
-        <div>
-          <h1 style={{ fontFamily:"'Poppins',sans-serif",fontSize:26,fontWeight:800,marginBottom:4 }}>My Videos 🎬</h1>
-          <p style={{ color:"var(--text3)",fontSize:14 }}>{videos.length} videos generated</p>
+    <div style={{ background: "var(--card)", border: `1px solid ${isUrgent && !isOverdue ? "rgba(245,158,11,0.4)" : isOverdue ? "rgba(239,68,68,0.4)" : "var(--border2)"}`, borderRadius: 16, padding: "20px", transition: "all 0.2s", opacity: sub.is_active ? 1 : 0.55 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ width: 44, height: 44, borderRadius: 12, background: catColor, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 18, color: "#fff", flexShrink: 0, textShadow: "0 1px 3px rgba(0,0,0,0.4)" }}>
+            {sub.name[0].toUpperCase()}
+          </div>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 16 }}>{sub.name}</div>
+            <div style={{ fontSize: 12, color: "var(--text4)", marginTop: 2 }}>{sub.category}</div>
+          </div>
         </div>
-        <div style={{ display:"flex",gap:8 }}>
-          {["all","ready","processing"].map(f => (
-            <button key={f} onClick={() => setFilter(f)} style={{
-              padding:"7px 16px",borderRadius:100,fontSize:13,fontWeight:600,
-              background:filter===f?"linear-gradient(135deg,rgba(124,58,237,0.2),rgba(236,72,153,0.15))":"var(--card)",
-              border:`1px solid ${filter===f?"rgba(124,58,237,0.4)":"var(--border2)"}`,
-              color:filter===f?"#a78bfa":"var(--text3)",cursor:"pointer",transition:"all 0.18s",
-            }}>
-              {f.charAt(0).toUpperCase()+f.slice(1)}
-            </button>
-          ))}
+        <div style={{ display: "flex", gap: 4 }}>
+          <button onClick={() => onEdit(sub)} style={{ background: "none", border: "none", color: "var(--text4)", fontSize: 15, cursor: "pointer", padding: 6, borderRadius: 8, transition: "all 0.15s" }}
+            onMouseOver={e => { e.currentTarget.style.background = "var(--bg)"; e.currentTarget.style.color = "var(--text2)"; }}
+            onMouseOut={e => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "var(--text4)"; }} title="Edit">✏️</button>
+          <button onClick={() => onDelete(sub.id)} style={{ background: "none", border: "none", color: "var(--text4)", fontSize: 15, cursor: "pointer", padding: 6, borderRadius: 8, transition: "all 0.15s" }}
+            onMouseOver={e => { e.currentTarget.style.background = "rgba(239,68,68,0.1)"; e.currentTarget.style.color = "#ef4444"; }}
+            onMouseOut={e => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "var(--text4)"; }} title="Delete">🗑️</button>
         </div>
       </div>
 
-      <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:20 }}>
-        {filtered.map(v => (
-          <div key={v.id} style={{
-            background:"var(--card)",border:"1px solid var(--border2)",borderRadius:16,overflow:"hidden",
-            transition:"transform 0.25s,box-shadow 0.25s",cursor:"pointer",
-          }}
-            onMouseOver={e=>{ e.currentTarget.style.transform="translateY(-4px)";e.currentTarget.style.boxShadow=`0 12px 40px ${v.color}25`; }}
-            onMouseOut={e=>{ e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="none"; }}>
-            {/* Thumbnail */}
-            <div style={{ height:160,background:`linear-gradient(135deg,${v.color}30,#0a0a1a)`,display:"flex",alignItems:"center",justifyContent:"center",position:"relative" }}>
-              <span style={{ fontSize:52 }}>{v.thumb}</span>
-              {/* Status badge */}
-              <div style={{
-                position:"absolute",top:12,right:12,
-                background:v.status==="ready"?"rgba(16,185,129,0.15)":"rgba(245,158,11,0.15)",
-                border:`1px solid ${v.status==="ready"?"rgba(16,185,129,0.4)":"rgba(245,158,11,0.4)"}`,
-                color:v.status==="ready"?"#6ee7b7":"#fcd34d",
-                fontSize:11,fontWeight:700,padding:"4px 10px",borderRadius:100,
-                display:"flex",alignItems:"center",gap:5,
-              }}>
-                {v.status==="ready" ? <><span style={{ width:6,height:6,borderRadius:"50%",background:"#10b981",display:"inline-block" }} />Ready</> : <><span style={{ width:6,height:6,borderRadius:"50%",background:"#f59e0b",display:"inline-block",animation:"pulse 1s infinite" }} />Processing</>}
-              </div>
-              <div style={{ position:"absolute",bottom:12,left:12,fontSize:11,fontWeight:600,color:"rgba(255,255,255,0.6)",background:"rgba(0,0,0,0.5)",padding:"3px 8px",borderRadius:6 }}>
-                {v.duration}s
-              </div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+        <div>
+          <div style={{ fontFamily: "'Poppins',sans-serif", fontSize: 22, fontWeight: 800, color: "#fff" }}>
+            {formatCurrency(sub.amount, sub.currency)}
+          </div>
+          <div style={{ fontSize: 12, color: "var(--text4)", marginTop: 2 }}>
+            {sub.billing_cycle} · {formatCurrency(sub.monthly_cost, sub.currency)}/mo
+          </div>
+        </div>
+
+        <div style={{ textAlign: "right" }}>
+          {days !== null && (
+            <div style={{ fontSize: 13, fontWeight: 600, color: isOverdue ? "#ef4444" : isUrgent ? "#f59e0b" : "var(--text3)", padding: "4px 10px", background: isOverdue ? "rgba(239,68,68,0.1)" : isUrgent ? "rgba(245,158,11,0.1)" : "var(--bg)", borderRadius: 8 }}>
+              {isOverdue ? `⚠️ ${Math.abs(days)}d overdue` : days === 0 ? "⚡ Due today" : isUrgent ? `⚡ ${days}d` : `${days}d`}
             </div>
-            {/* Info */}
-            <div style={{ padding:16 }}>
-              <div style={{ fontSize:14,fontWeight:700,color:"var(--text)",marginBottom:6,lineHeight:1.4 }}>{v.topic}</div>
-              <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12 }}>
-                <div style={{ fontSize:12,color:"var(--text4)" }}>{v.createdAt}</div>
-                {v.status === "ready" && <div style={{ fontSize:12,fontWeight:600,color:"#a78bfa" }}>👁 {v.views}</div>}
-              </div>
-              {v.status === "ready" && (
-                <div style={{ display:"flex",gap:8 }}>
-                  <button style={{ flex:1,background:"linear-gradient(135deg,#7c3aed,#ec4899)",color:"#fff",border:"none",borderRadius:8,padding:"8px",fontWeight:600,fontSize:12,cursor:"pointer" }}>⬇️ Download</button>
-                  <button style={{ flex:1,background:"var(--bg)",color:"var(--text3)",border:"1px solid var(--border2)",borderRadius:8,padding:"8px",fontWeight:600,fontSize:12,cursor:"pointer" }}>📤 Share</button>
+          )}
+          <div style={{ fontSize: 11, color: "var(--text4)", marginTop: 4 }}>
+            {sub.next_billing_date ? new Date(sub.next_billing_date).toLocaleDateString() : "—"}
+          </div>
+        </div>
+      </div>
+
+      {!sub.is_active && (
+        <div style={{ marginTop: 12, padding: "6px 10px", background: "rgba(100,116,139,0.15)", borderRadius: 8, fontSize: 12, color: "var(--text4)", textAlign: "center" }}>
+          Paused / Cancelled
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Analytics Panel ──────────────────────────────────────────────────────────
+function AnalyticsPanel({ analytics }) {
+  if (!analytics) return null;
+  const { monthly_total, yearly_total, active_count, by_category, upcoming_renewals, most_expensive } = analytics;
+
+  const catEntries = Object.entries(by_category).sort((a, b) => b[1] - a[1]);
+  const maxCat = catEntries[0]?.[1] || 1;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      {/* Summary cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        {[
+          { label: "Monthly Spend", value: `$${monthly_total.toFixed(2)}`, color: "#7c3aed" },
+          { label: "Yearly Total", value: `$${yearly_total.toFixed(2)}`, color: "#06b6d4" },
+          { label: "Active Subs", value: active_count, color: "#10b981" },
+          { label: "Due in 30d", value: upcoming_renewals.length, color: "#f59e0b" },
+        ].map((c, i) => (
+          <div key={i} style={{ background: "var(--bg)", borderRadius: 14, padding: "16px", border: `1px solid ${c.color}22` }}>
+            <div style={{ fontSize: 11, color: "var(--text4)", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.05em" }}>{c.label}</div>
+            <div style={{ fontFamily: "'Poppins',sans-serif", fontSize: 22, fontWeight: 800, color: c.color }}>{c.value}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* By category */}
+      {catEntries.length > 0 && (
+        <div style={{ background: "var(--bg)", borderRadius: 16, padding: 20, border: "1px solid var(--border2)" }}>
+          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 16 }}>Spend by Category</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {catEntries.map(([cat, val]) => (
+              <div key={cat}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 4 }}>
+                  <span style={{ color: "var(--text2)" }}>{cat}</span>
+                  <span style={{ fontWeight: 600 }}>${val.toFixed(2)}/mo</span>
                 </div>
+                <div style={{ height: 6, background: "var(--card)", borderRadius: 3, overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${(val / maxCat) * 100}%`, background: `${CATEGORY_COLORS[cat] || "#7c3aed"}`, borderRadius: 3, transition: "width 0.5s ease" }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Upcoming renewals */}
+      {upcoming_renewals.length > 0 && (
+        <div style={{ background: "var(--bg)", borderRadius: 16, padding: 20, border: "1px solid rgba(245,158,11,0.2)" }}>
+          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14, color: "#f59e0b" }}>🔔 Upcoming Renewals</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {upcoming_renewals.map(s => {
+              const d = daysUntil(s.next_billing_date);
+              return (
+                <div key={s.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: "var(--card)", borderRadius: 10 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <div style={{ width: 30, height: 30, borderRadius: 8, background: s.color || CATEGORY_COLORS[s.category] || "#475569", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 13, color: "#fff", flexShrink: 0 }}>
+                      {s.name[0]}
+                    </div>
+                    <span style={{ fontSize: 13, fontWeight: 600 }}>{s.name}</span>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: 13, fontWeight: 700 }}>${s.amount}</div>
+                    <div style={{ fontSize: 11, color: d <= 3 ? "#f59e0b" : "var(--text4)" }}>{d === 0 ? "Today" : `${d}d`}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Most expensive */}
+      {most_expensive.length > 0 && (
+        <div style={{ background: "var(--bg)", borderRadius: 16, padding: 20, border: "1px solid var(--border2)" }}>
+          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14 }}>💸 Most Expensive</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {most_expensive.map((s, i) => (
+              <div key={s.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", background: "var(--card)", borderRadius: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 14, color: i === 0 ? "#f59e0b" : i === 1 ? "var(--text3)" : "#cd7f32" }}>
+                    {i === 0 ? "🥇" : i === 1 ? "🥈" : "🥉"}
+                  </span>
+                  <span style={{ fontSize: 13, fontWeight: 600 }}>{s.name}</span>
+                </div>
+                <span style={{ fontSize: 13, fontWeight: 700 }}>${s.monthly_cost.toFixed(2)}/mo</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Main Dashboard ───────────────────────────────────────────────────────────
+export default function DashboardPage({ user, onLogout, onUpgrade }) {
+  const [subs, setSubs] = useState([]);
+  const [analytics, setAnalytics] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [editSub, setEditSub] = useState(null);
+  const [activeTab, setActiveTab] = useState("all"); // all, active, inactive
+  const [filterCategory, setFilterCategory] = useState("All");
+  const [showAnalytics, setShowAnalytics] = useState(true);
+  const [userInfo, setUserInfo] = useState(null);
+  const [toast, setToast] = useState(null);
+
+  const showToast = (msg, type = "success") => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  const fetchData = useCallback(async () => {
+    const token = localStorage.getItem("st_token");
+    if (!token) return;
+    setLoading(true);
+    try {
+      const [subsRes, analyticsRes, meRes] = await Promise.all([
+        fetch(`${API}/api/subscriptions`, { headers: authHeaders() }),
+        fetch(`${API}/api/analytics`, { headers: authHeaders() }),
+        fetch(`${API}/api/auth/me`, { headers: authHeaders() }),
+      ]);
+      if (subsRes.ok) setSubs(await subsRes.json());
+      if (analyticsRes.ok) setAnalytics(await analyticsRes.json());
+      if (meRes.ok) setUserInfo(await meRes.json());
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  const handleDelete = async (id) => {
+    if (!confirm("Delete this subscription?")) return;
+    await fetch(`${API}/api/subscriptions/${id}`, { method: "DELETE", headers: authHeaders() });
+    showToast("Subscription deleted");
+    fetchData();
+  };
+
+  const handleSaved = (saved) => {
+    setShowModal(false);
+    setEditSub(null);
+    showToast(editSub ? "Subscription updated!" : "Subscription added!");
+    fetchData();
+  };
+
+  const filteredSubs = subs.filter(s => {
+    if (activeTab === "active" && !s.is_active) return false;
+    if (activeTab === "inactive" && s.is_active) return false;
+    if (filterCategory !== "All" && s.category !== filterCategory) return false;
+    return true;
+  });
+
+  const isFreePlan = userInfo?.plan === "free";
+  const atLimit = isFreePlan && userInfo?.active_subscription_count >= (userInfo?.free_limit || 10);
+
+  return (
+    <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
+
+      {/* Toast */}
+      {toast && (
+        <div style={{ position: "fixed", top: 24, right: 24, zIndex: 2000, padding: "12px 20px", borderRadius: 12, fontSize: 14, fontWeight: 600, background: toast.type === "success" ? "rgba(16,185,129,0.9)" : "rgba(239,68,68,0.9)", color: "#fff", boxShadow: "0 8px 24px rgba(0,0,0,0.4)", backdropFilter: "blur(8px)" }}>
+          {toast.type === "success" ? "✓ " : "⚠ "}{toast.msg}
+        </div>
+      )}
+
+      {/* Modals */}
+      {(showModal || editSub) && (
+        <SubModal
+          sub={editSub}
+          onClose={() => { setShowModal(false); setEditSub(null); }}
+          onSaved={handleSaved}
+        />
+      )}
+
+      {/* Header */}
+      <header style={{ background: "rgba(10,10,26,0.9)", backdropFilter: "blur(20px)", borderBottom: "1px solid var(--border2)", padding: "0 24px", position: "sticky", top: 0, zIndex: 50 }}>
+        <div style={{ maxWidth: 1300, margin: "0 auto", height: 64, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ fontSize: 22 }}>💳</span>
+            <span style={{ fontFamily: "'Poppins',sans-serif", fontWeight: 800, fontSize: 18, background: "linear-gradient(135deg,#a78bfa,#06b6d4)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>SubTrack</span>
+            {isFreePlan && <span style={{ fontSize: 11, background: "rgba(124,58,237,0.2)", color: "#a78bfa", padding: "3px 8px", borderRadius: 20, fontWeight: 600, border: "1px solid rgba(124,58,237,0.3)" }}>FREE</span>}
+            {!isFreePlan && <span style={{ fontSize: 11, background: "rgba(6,182,212,0.2)", color: "#06b6d4", padding: "3px 8px", borderRadius: 20, fontWeight: 600, border: "1px solid rgba(6,182,212,0.3)" }}>PRO</span>}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {isFreePlan && (
+              <button onClick={onUpgrade} style={{ background: "linear-gradient(135deg,#7c3aed,#06b6d4)", color: "#fff", border: "none", padding: "7px 16px", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                ⚡ Upgrade to Pro
+              </button>
+            )}
+            <div style={{ fontSize: 13, color: "var(--text3)" }}>{user?.email || user?.name}</div>
+            <button onClick={onLogout} style={{ background: "none", color: "var(--text4)", border: "1px solid var(--border2)", padding: "7px 14px", borderRadius: 8, fontSize: 13, cursor: "pointer", transition: "all 0.2s" }}
+              onMouseOver={e => { e.currentTarget.style.borderColor = "#ef4444"; e.currentTarget.style.color = "#ef4444"; }}
+              onMouseOut={e => { e.currentTarget.style.borderColor = "var(--border2)"; e.currentTarget.style.color = "var(--text4)"; }}>
+              Log Out
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* Main layout */}
+      <div style={{ maxWidth: 1300, margin: "0 auto", padding: "28px 24px", display: "grid", gridTemplateColumns: showAnalytics ? "1fr 320px" : "1fr", gap: 24, alignItems: "start" }}>
+
+        {/* Left: Subscriptions */}
+        <div>
+          {/* Top bar */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
+            <div>
+              <h1 style={{ fontFamily: "'Poppins',sans-serif", fontWeight: 800, fontSize: 26 }}>My Subscriptions</h1>
+              <p style={{ fontSize: 14, color: "var(--text3)", marginTop: 4 }}>
+                {subs.filter(s => s.is_active).length} active
+                {isFreePlan && ` · ${userInfo?.free_limit || 10} max on free plan`}
+              </p>
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={() => setShowAnalytics(s => !s)} style={{ background: showAnalytics ? "rgba(6,182,212,0.15)" : "var(--card)", color: showAnalytics ? "#06b6d4" : "var(--text3)", border: `1px solid ${showAnalytics ? "rgba(6,182,212,0.3)" : "var(--border2)"}`, padding: "9px 16px", borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: "pointer", transition: "all 0.2s" }}>
+                📊 Analytics
+              </button>
+              <button
+                onClick={() => atLimit ? onUpgrade() : setShowModal(true)}
+                style={{ background: "linear-gradient(135deg,#7c3aed,#06b6d4)", color: "#fff", border: "none", padding: "9px 20px", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: "pointer", boxShadow: "0 4px 16px rgba(124,58,237,0.4)", transition: "all 0.2s" }}
+                onMouseOver={e => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 6px 20px rgba(124,58,237,0.5)"; }}
+                onMouseOut={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "0 4px 16px rgba(124,58,237,0.4)"; }}>
+                {atLimit ? "⚡ Upgrade to Add More" : "+ Add Subscription"}
+              </button>
+            </div>
+          </div>
+
+          {/* Free plan limit warning */}
+          {atLimit && (
+            <div style={{ background: "rgba(124,58,237,0.1)", border: "1px solid rgba(124,58,237,0.3)", borderRadius: 14, padding: "14px 18px", marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 14, color: "#a78bfa" }}>Free plan limit reached</div>
+                <div style={{ fontSize: 13, color: "var(--text3)", marginTop: 2 }}>Upgrade to Pro for unlimited subscriptions.</div>
+              </div>
+              <button onClick={onUpgrade} style={{ background: "linear-gradient(135deg,#7c3aed,#06b6d4)", color: "#fff", border: "none", padding: "8px 18px", borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                Upgrade Now
+              </button>
+            </div>
+          )}
+
+          {/* Filters */}
+          <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap", alignItems: "center" }}>
+            {["all", "active", "inactive"].map(tab => (
+              <button key={tab} onClick={() => setActiveTab(tab)} style={{ background: activeTab === tab ? "rgba(124,58,237,0.15)" : "var(--card)", color: activeTab === tab ? "#a78bfa" : "var(--text3)", border: `1px solid ${activeTab === tab ? "rgba(124,58,237,0.3)" : "var(--border2)"}`, padding: "7px 16px", borderRadius: 20, fontSize: 13, fontWeight: 600, cursor: "pointer", transition: "all 0.15s", textTransform: "capitalize" }}>
+                {tab}
+              </button>
+            ))}
+
+            <div style={{ width: 1, height: 24, background: "var(--border2)" }} />
+
+            <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} style={{ background: "var(--card)", color: "var(--text2)", border: "1px solid var(--border2)", borderRadius: 20, padding: "7px 14px", fontSize: 13, cursor: "pointer" }}>
+              <option value="All">All Categories</option>
+              {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+
+          {/* Subscription list */}
+          {loading ? (
+            <div style={{ textAlign: "center", padding: "80px 0", color: "var(--text4)" }}>
+              <div style={{ width: 40, height: 40, border: "3px solid var(--border2)", borderTopColor: "var(--primary)", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 16px" }} />
+              Loading subscriptions...
+            </div>
+          ) : filteredSubs.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "80px 24px", border: "2px dashed var(--border2)", borderRadius: 20 }}>
+              <div style={{ fontSize: 48, marginBottom: 16 }}>💳</div>
+              <h3 style={{ fontFamily: "'Poppins',sans-serif", fontWeight: 700, fontSize: 20, marginBottom: 8 }}>
+                {subs.length === 0 ? "No subscriptions yet" : "No subscriptions match this filter"}
+              </h3>
+              <p style={{ color: "var(--text3)", fontSize: 15, marginBottom: 24 }}>
+                {subs.length === 0 ? "Add your first subscription to start tracking your spend." : "Try changing the filter."}
+              </p>
+              {subs.length === 0 && (
+                <button onClick={() => setShowModal(true)} style={{ background: "linear-gradient(135deg,#7c3aed,#06b6d4)", color: "#fff", border: "none", padding: "12px 28px", borderRadius: 12, fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+                  + Add First Subscription
+                </button>
               )}
             </div>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: 16 }}>
+              {filteredSubs.map(sub => (
+                <SubCard
+                  key={sub.id}
+                  sub={sub}
+                  onEdit={s => { setEditSub(s); setShowModal(false); }}
+                  onDelete={handleDelete}
+                  onToggle={() => {}}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Right: Analytics sidebar */}
+        {showAnalytics && (
+          <div style={{ position: "sticky", top: 88 }}>
+            <AnalyticsPanel analytics={analytics} />
           </div>
-        ))}
+        )}
       </div>
+
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+      `}</style>
     </div>
   );
-}
-
-function Analytics() {
-  const stats = [
-    { label:"Total Views",value:"812,000",change:"+24%",up:true },
-    { label:"Total Videos",value:"6",change:"+6 this month",up:true },
-    { label:"Avg Engagement",value:"8.4%",change:"+1.2%",up:true },
-    { label:"Est. Revenue",value:"$2,840",change:"+$420",up:true },
-  ];
-
-  return (
-    <div>
-      <div style={{ marginBottom:32 }}>
-        <h1 style={{ fontFamily:"'Poppins',sans-serif",fontSize:26,fontWeight:800,marginBottom:4 }}>Analytics 📊</h1>
-        <p style={{ color:"var(--text3)",fontSize:14 }}>Last 30 days performance</p>
-      </div>
-      <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:16,marginBottom:32 }}>
-        {stats.map(s => (
-          <div key={s.label} style={{ background:"var(--card)",border:"1px solid var(--border2)",borderRadius:16,padding:24 }}>
-            <div style={{ fontSize:13,color:"var(--text3)",marginBottom:8 }}>{s.label}</div>
-            <div style={{ fontFamily:"'Poppins',sans-serif",fontSize:28,fontWeight:800,marginBottom:6 }}>{s.value}</div>
-            <div style={{ fontSize:12,color:"#10b981",fontWeight:600 }}>{s.change}</div>
-          </div>
-        ))}
-      </div>
-      <div style={{ background:"var(--card)",border:"1px solid var(--border2)",borderRadius:16,padding:24,display:"flex",alignItems:"center",justifyContent:"center",height:220,color:"var(--text3)",fontSize:15 }}>
-        📈 Detailed charts available on Pro plan — <span style={{ color:"#a78bfa",cursor:"pointer",marginLeft:4 }}>Upgrade</span>
-      </div>
-    </div>
-  );
-}
-
-/* ─── MAIN DASHBOARD ─── */
-export default function DashboardPage({ onLogout, onUpgrade, user }) {
-  const [activeTab, setActiveTab] = useState("create");
-  const [videosCount, setVideosCount] = useState(MOCK_VIDEOS.length);
-
-  const handleGenerated = () => setVideosCount(c => c + 1);
-
-  const renderContent = () => {
-    switch (activeTab) {
-      case "create":    return <CreatePanel onGenerated={handleGenerated} />;
-      case "videos":    return <VideoGallery />;
-      case "analytics": return <Analytics />;
-      default:
-        return (
-          <div style={{ display:"flex",alignItems:"center",justifyContent:"center",height:"50vh",color:"var(--text3)",fontSize:16 }}>
-            🚧 {activeTab.charAt(0).toUpperCase()+activeTab.slice(1)} coming soon
-          </div>
-        );
-    }
-  };
-
-  return (
-    <div style={{ display:"flex",minHeight:"100vh",background:"var(--bg)" }}>
-      <Sidebar active={activeTab} onNav={setActiveTab} user={user} onLogout={onLogout} />
-      <main style={{ flex:1,padding:"32px 36px",overflowY:"auto",minHeight:"100vh" }}>
-        {renderContent()}
-      </main>
-    </div>
-  );
-}
-
-/* ─── HELPER ─── */
-function generateMockScript(topic, niche) {
-  const hooks = {
-    finance:    "Here's the SHOCKING truth about money that nobody tells you...",
-    motivation: "If you want to change your life, watch this right now...",
-    education:  "Did you know this fact that most people completely miss?",
-    health:     "Stop doing this one thing that's destroying your health...",
-    default:    "You won't believe what I'm about to share with you...",
-  };
-  const hook = hooks[niche] || hooks.default;
-
-  return `HOOK: ${hook}
-
-MAIN CONTENT:
-Today we're talking about "${topic}" — and this could genuinely change the way you think.
-
-Point 1: Most people never realize how important this is until it's too late.
-
-Point 2: The research shows something fascinating — when you apply this principle consistently, results follow within 30 days.
-
-Point 3: Here's the simple action you can take TODAY to get started.
-
-CALL TO ACTION:
-Follow for more content like this. Drop a comment below — have you tried this before?
-
-OUTRO:
-Stay consistent. Small actions, repeated daily, create massive results.`;
 }

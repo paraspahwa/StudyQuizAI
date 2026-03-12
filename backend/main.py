@@ -1,227 +1,37 @@
 """
-ReelForge AI — Backend (FastAPI)
-==================================
-AI-powered short video creation platform.
-  • Video script generation (OpenAI + template fallback)
-  • Video management (create, list, get)
+SubTrack — Backend (FastAPI)
+============================
+Subscription tracking app.
+  • Subscription CRUD
+  • Analytics & spend summaries
   • User auth (JWT)
-  • Razorpay payments
-  • Usage limits (free: 5 videos/month, pro: unlimited)
+  • Razorpay payments (pro plan upgrade)
 """
 
 import os
-import json
 import hmac
 import hashlib
-import time
 from datetime import datetime, timedelta
-from typing import Optional
-from collections import defaultdict
-from io import BytesIO
-
-from fastapi.responses import StreamingResponse
-
-from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import letter
-from reportlab.lib.utils import simpleSplit
+from typing import Optional, List
+from calendar import monthrange
 
 from dotenv import load_dotenv
-load_dotenv()  # Load .env for local development (Docker uses env_file)
+load_dotenv()
 
 import razorpay
-from fastapi import FastAPI, UploadFile, File, Query, HTTPException, Request, Depends
+from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from pdf_parser import extract_text_from_pdf, chunk_text
-from quiz_generator import generate_quiz
-from video_generator import generate_video_script
-from database import init_db, get_db, User, Quiz, QuizResult, Payment
+from database import init_db, get_db, User, Subscription, Payment, FREE_SUBSCRIPTION_LIMIT
 from auth import create_access_token, get_current_user
-
-# ─────────────────────────────────────────────
-# Pydantic Models (DEFINED FIRST!)
-# ─────────────────────────────────────────────
-class RegisterRequest(BaseModel):
-    email: str
-    password: str
-    full_name: Optional[str] = None
-
-
-class LoginRequest(BaseModel):
-    email: str
-    password: str
-
-
-class AuthResponse(BaseModel):
-    access_token: str
-    user_id: int
-    email: str
-    full_name: Optional[str] = None
-
-
-class OrderRequest(BaseModel):
-    amount: int  # in paise (49900 = ₹499)
-    currency: str = "INR"
-    plan_type: str = "yearly"  # monthly | yearly
-
-
-class PaymentVerification(BaseModel):
-    razorpay_order_id: str
-    razorpay_payment_id: str
-    razorpay_signature: str
-    user_id: Optional[str] = None
-
-
-class SubscriptionRequest(BaseModel):
-    plan_id: str
-    total_count: int = 12
-    notes: Optional[dict] = None
-
-
-class SubscriptionVerification(BaseModel):
-    razorpay_subscription_id: str
-    razorpay_payment_id: str
-    razorpay_signature: str
-    user_id: Optional[str] = None
-
-
-class ScriptRequest(BaseModel):
-    topic: str
-    niche: str = "motivation"
-    duration: int = 30      # seconds: 15, 30, 60
-    voice: str = "nova"
-    style: str = "cinematic"
-
-
-class VideoCreateRequest(BaseModel):
-    topic: str
-    niche: str = "motivation"
-    duration: int = 30
-    voice: str = "nova"
-    style: str = "cinematic"
-    script: Optional[str] = None  # optional pre-generated script
-
-    
-# ─────────────────────────────────────────────
-# App Init
-# ─────────────────────────────────────────────
-app = FastAPI(title="ReelForge AI API", version="3.0.0")
-
-# Initialize database on startup
-@app.on_event("startup")
-def startup_event():
-    """Initialize database on app startup"""
-    init_db()
-    print("🎬 ReelForge AI API Started!")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://localhost:5173",
-        # Add your production domain:
-        # "https://reelforge.ai",
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# ─────────────────────────────────────────────
-# Razorpay Client
-# ─────────────────────────────────────────────
-RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID", "rzp_test_xxxxxxxxxxxx")
-RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET", "your_secret_key")
-razorpay_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
-
-# ─────────────────────────────────────────────
-# AUTH ROUTES
-# ─────────────────────────────────────────────
-@app.post("/auth/register")
-async def register(request: RegisterRequest, db: Session = Depends(get_db)):
-    """Register a new user"""
-    # Check if email exists
-    existing_user = db.query(User).filter(User.email == request.email).first()
-    if existing_user:
-        raise HTTPException(status_code=400, detail="Email already registered")
-    
-    # Create new user
-    new_user = User(
-        email=request.email,
-        full_name=request.full_name or "",
-        plan="free",
-        subscription_active=True
-    )
-    new_user.set_password(request.password)
-    
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
-    
-    # Create access token
-    access_token = create_access_token(new_user.id)
-    
-    return {
-        "status": "success",
-        "access_token": access_token,
-        "user_id": new_user.id,
-        "email": new_user.email,
-        "full_name": new_user.full_name,
-    }
-
-
-@app.post("/auth/login")
-async def login(request: LoginRequest, db: Session = Depends(get_db)):
-    """Login user"""
-    user = db.query(User).filter(User.email == request.email).first()
-    
-    if not user or not user.check_password(request.password):
-        raise HTTPException(status_code=401, detail="Invalid email or password")
-    
-    # Create access token
-    access_token = create_access_token(user.id)
-    
-    return {
-        "status": "success",
-        "access_token": access_token,
-        "user_id": user.id,
-        "email": user.email,
-        "full_name": user.full_name,
-    }
-
-
-@app.get("/auth/me")
-async def get_me(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Get current user info"""
-    # Refresh to get latest data
-    db.refresh(current_user)
-    
-    return {
-        "id": current_user.id,
-        "email": current_user.email,
-        "full_name": current_user.full_name,
-        "plan": current_user.plan,
-        "subscription_active": current_user.subscription_active,
-        "created_at": current_user.created_at,
-    }
-
-# ─────────────────────────────────────────────
-# In-Memory Store (replace with DB in production)
-# ─────────────────────────────────────────────
-# Tracks free usage per IP: { "ip": { "date": "2026-02-24", "count": 2 } }
-free_usage_tracker: dict = defaultdict(lambda: {"date": "", "count": 0})
-
-# Tracks pro users: { "user_id_or_ip": True }
-pro_users: set = set()
-
-FREE_DAILY_LIMIT = 3
 
 
 # ─────────────────────────────────────────────
 # Pydantic Models
 # ─────────────────────────────────────────────
+
 class RegisterRequest(BaseModel):
     email: str
     password: str
@@ -233,625 +43,395 @@ class LoginRequest(BaseModel):
     password: str
 
 
-class AuthResponse(BaseModel):
-    access_token: str
-    user_id: int
-    email: str
-    full_name: Optional[str]
+class SubscriptionCreate(BaseModel):
+    name: str
+    category: str = "Other"
+    amount: float
+    currency: str = "USD"
+    billing_cycle: str = "monthly"  # monthly, yearly, weekly
+    next_billing_date: str  # ISO date string YYYY-MM-DD
+    notes: Optional[str] = None
+    color: Optional[str] = None
+    is_active: bool = True
+
+
+class SubscriptionUpdate(BaseModel):
+    name: Optional[str] = None
+    category: Optional[str] = None
+    amount: Optional[float] = None
+    currency: Optional[str] = None
+    billing_cycle: Optional[str] = None
+    next_billing_date: Optional[str] = None
+    notes: Optional[str] = None
+    color: Optional[str] = None
+    is_active: Optional[bool] = None
 
 
 class OrderRequest(BaseModel):
-    amount: int  # in paise (49900 = ₹499)
+    amount: int  # paise
     currency: str = "INR"
-    plan_type: str = "yearly"  # monthly | yearly
+    plan_type: str = "pro"
 
 
 class PaymentVerification(BaseModel):
     razorpay_order_id: str
     razorpay_payment_id: str
     razorpay_signature: str
-    user_id: Optional[str] = None
-
-
-class SubscriptionRequest(BaseModel):
-    plan_id: str
-    total_count: int = 12
-    notes: Optional[dict] = None
-
-
-class SubscriptionVerification(BaseModel):
-    razorpay_subscription_id: str
-    razorpay_payment_id: str
-    razorpay_signature: str
-    user_id: Optional[str] = None
 
 
 # ─────────────────────────────────────────────
-# Usage Limit Helpers
+# App Setup
 # ─────────────────────────────────────────────
-def get_client_ip(request: Request) -> str:
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host
+
+app = FastAPI(title="SubTrack API", version="1.0.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Restrict to your domain in production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID", "")
+RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET", "")
+RAZORPAY_WEBHOOK_SECRET = os.getenv("RAZORPAY_WEBHOOK_SECRET", "")
+
+razorpay_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET)) if RAZORPAY_KEY_ID else None
 
 
-def check_usage_limit(client_id: str) -> dict:
-    """Check if a user can generate a quiz."""
-    if client_id in pro_users:
-        return {"allowed": True, "is_pro": True, "remaining": -1}
-
-    today = datetime.utcnow().strftime("%Y-%m-%d")
-    tracker = free_usage_tracker[client_id]
-
-    if tracker["date"] != today:
-        tracker["date"] = today
-        tracker["count"] = 0
-
-    remaining = FREE_DAILY_LIMIT - tracker["count"]
-    return {
-        "allowed": remaining > 0,
-        "is_pro": False,
-        "remaining": max(0, remaining),
-        "limit": FREE_DAILY_LIMIT,
-    }
-
-
-def increment_usage(client_id: str):
-    today = datetime.utcnow().strftime("%Y-%m-%d")
-    tracker = free_usage_tracker[client_id]
-    if tracker["date"] != today:
-        tracker["date"] = today
-        tracker["count"] = 0
-    tracker["count"] += 1
+@app.on_event("startup")
+async def startup_event():
+    init_db()
 
 
 # ─────────────────────────────────────────────
-# QUIZ ROUTES (original functionality)
+# Auth Routes
 # ─────────────────────────────────────────────
-@app.post("/upload-and-generate")
-async def upload_and_generate(
-    file: UploadFile = File(...),
-    num_questions: int = Query(default=5),
-    difficulty: str = Query(default="medium"),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """
-    Upload PDF and generate AI quiz for authenticated user.
-    Enforces usage limits based on subscription plan.
-    - Free users: Limited to 1 total quiz, max 10 MB file size
-    - Pro users: Unlimited quizzes, no file size limit
-    """
-    # File size validation for free users (10 MB = 10,485,760 bytes)
-    MAX_FILE_SIZE_FREE = 10 * 1024 * 1024  # 10 MB
-    if current_user.plan == "free":
-        contents = await file.read()
-        if len(contents) > MAX_FILE_SIZE_FREE:
-            raise HTTPException(
-                status_code=413,
-                detail={
-                    "error": "file_too_large",
-                    "message": f"Free users cannot upload files larger than 10 MB. Your file is {len(contents) / (1024*1024):.2f} MB. Upgrade to Pro for unlimited file sizes!",
-                    "max_size_mb": 10,
-                    "your_size_mb": round(len(contents) / (1024*1024), 2),
-                },
-            )
-    else:
-        contents = await file.read()
-    
-    # Check usage limit
-    if not current_user.can_create_quiz():
-        raise HTTPException(
-            status_code=429,
-            detail={
-                "error": "limit_reached",
-                "message": f"Free users are limited to 1 quiz. You have already generated your free quiz. Upgrade to Pro for unlimited quizzes!",
-                "remaining": 0,
-                "limit": 1,
-            },
-        )
 
-    # Extract text from PDF
-    text = extract_text_from_pdf(contents)
-
-    if not text or len(text.strip()) < 50:
-        raise HTTPException(status_code=400, detail="Could not extract enough text from the PDF.")
-
-    # Chunk large PDFs
-    chunks = chunk_text(text)
-
-    # Generate quiz
-    quiz = generate_quiz(chunks, num_questions=num_questions, difficulty=difficulty)
-
-    # Store quiz in database
-    db_quiz = Quiz(
-        user_id=current_user.id,
-        pdf_filename=file.filename,
-        pdf_text=text,
-        quiz_data=quiz,
-        num_questions=len(quiz.get("questions", [])),
-    )
-    db.add(db_quiz)
-    
-    # Increment usage for free users
-    if current_user.plan == "free":
-        current_user.increment_quiz_count()
-    
+@app.post("/api/auth/register")
+def register(req: RegisterRequest, db: Session = Depends(get_db)):
+    if db.query(User).filter(User.email == req.email.lower()).first():
+        raise HTTPException(status_code=400, detail="Email already registered")
+    user = User(email=req.email.lower(), full_name=req.full_name)
+    user.set_password(req.password)
+    db.add(user)
     db.commit()
-    db.refresh(current_user)
-
+    db.refresh(user)
+    token = create_access_token(user.id)
     return {
-        "status": "success",
-        "quiz_id": db_quiz.id,
-        "quiz": quiz,
-        "usage": {
-            "plan": current_user.plan,
-            "quizzes_generated": current_user.total_quizzes_generated if current_user.plan == "free" else 0,
-            "quiz_limit": 1 if current_user.plan == "free" else -1,
-            "remaining": max(0, 1 - current_user.total_quizzes_generated) if current_user.plan == "free" else -1,
-        },
+        "access_token": token,
+        "user_id": user.id,
+        "email": user.email,
+        "full_name": user.full_name,
+        "plan": user.plan,
     }
 
 
-def _create_pdf_bytes(quiz: dict, include_answers: bool = False) -> BytesIO:
-    """Create a PDF bytes buffer from quiz dict. If include_answers is True,
-    include the correct answer and explanations.
-    """
-    buffer = BytesIO()
-    width, height = letter
-    c = canvas.Canvas(buffer, pagesize=letter)
-    margin_x = 40
-    margin_y = 72
-    y = height - margin_y
-    font_name = "Helvetica"
-    question_font_size = 12
-    option_font_size = 11
-    leading = 14
-
-    c.setTitle("StudyQuizAI Quiz")
-
-    questions = quiz.get("questions", [])
-
-    for idx, q in enumerate(questions, start=1):
-        # Page break if not enough space
-        if y < margin_y + 120:
-            c.showPage()
-            y = height - margin_y
-
-        # Question header
-        q_header = f"Q{idx}. {q.get('question', '')}"
-        q_lines = simpleSplit(q_header, font_name, question_font_size, width - 2 * margin_x)
-        c.setFont(font_name, question_font_size)
-        for line in q_lines:
-            c.drawString(margin_x, y, line)
-            y -= leading
-
-        # Options
-        options = q.get("options", [])
-        opt_labels = ["A", "B", "C", "D"]
-        c.setFont(font_name, option_font_size)
-        for i, opt in enumerate(options):
-            opt_text = f"  {opt_labels[i]}. {opt.get('text', '')}"
-            opt_lines = simpleSplit(opt_text, font_name, option_font_size, width - 2 * margin_x)
-            for line in opt_lines:
-                c.drawString(margin_x + 8, y, line)
-                y -= leading
-
-        # If answers requested, add correct answer and explanation
-        if include_answers:
-            # Find correct option
-            correct = None
-            for i, opt in enumerate(options):
-                if opt.get("is_correct"):
-                    correct = (opt_labels[i], opt.get("explanation", ""))
-                    break
-
-            if correct:
-                ans_text = f"Answer: {correct[0]}"
-                ans_lines = simpleSplit(ans_text, font_name, option_font_size, width - 2 * margin_x)
-                for line in ans_lines:
-                    c.drawString(margin_x + 8, y, line)
-                    y -= leading
-
-                # Explanation
-                expl_lines = simpleSplit(f"Explanation: {correct[1]}", font_name, option_font_size, width - 2 * margin_x)
-                for line in expl_lines:
-                    c.drawString(margin_x + 8, y, line)
-                    y -= leading
-
-        # Add spacing between questions
-        y -= leading
-
-    c.save()
-    buffer.seek(0)
-    return buffer
-
-
-@app.get("/quiz/{quiz_id}/download")
-async def download_quiz(quiz_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Return the quiz as a printable PDF (questions + options)."""
-    db_quiz = db.query(Quiz).filter(Quiz.id == quiz_id).first()
-    if not db_quiz:
-        raise HTTPException(status_code=404, detail="Quiz not found")
-    
-    # Verify ownership
-    if db_quiz.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized to access this quiz")
-
-    quiz_data = db_quiz.quiz_data
-    pdf_bytes = _create_pdf_bytes(quiz_data, include_answers=False)
-    headers = {"Content-Disposition": f"attachment; filename=quiz_{quiz_id}.pdf"}
-    return StreamingResponse(pdf_bytes, media_type="application/pdf", headers=headers)
-
-
-@app.get("/quiz/{quiz_id}/answers")
-async def download_answer_sheet(quiz_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Return the answer sheet as PDF (correct answers + explanations)."""
-    db_quiz = db.query(Quiz).filter(Quiz.id == quiz_id).first()
-    if not db_quiz:
-        raise HTTPException(status_code=404, detail="Quiz not found")
-    
-    # Verify ownership
-    if db_quiz.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized to access this quiz")
-
-    quiz_data = db_quiz.quiz_data
-    pdf_bytes = _create_pdf_bytes(quiz_data, include_answers=True)
-    headers = {"Content-Disposition": f"attachment; filename=answers_{quiz_id}.pdf"}
-    return StreamingResponse(pdf_bytes, media_type="application/pdf", headers=headers)
-
-
-@app.get("/usage-status")
-async def usage_status(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Check current usage status for authenticated user."""
-    db.refresh(current_user)
-    
+@app.post("/api/auth/login")
+def login(req: LoginRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == req.email.lower()).first()
+    if not user or not user.check_password(req.password):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    token = create_access_token(user.id)
     return {
+        "access_token": token,
+        "user_id": user.id,
+        "email": user.email,
+        "full_name": user.full_name,
+        "plan": user.plan,
+    }
+
+
+@app.get("/api/auth/me")
+def me(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    count = db.query(Subscription).filter(
+        Subscription.user_id == current_user.id,
+        Subscription.is_active == True
+    ).count()
+    return {
+        "user_id": current_user.id,
+        "email": current_user.email,
+        "full_name": current_user.full_name,
         "plan": current_user.plan,
         "subscription_active": current_user.subscription_active,
-        "is_pro": current_user.plan != "free",
-        "quizzes_generated": current_user.total_quizzes_generated if current_user.plan == "free" else 0,
-        "quiz_limit": 1 if current_user.plan == "free" else -1,
-        "remaining": max(0, 1 - current_user.total_quizzes_generated) if current_user.plan == "free" else -1,
-        "limit": 1 if current_user.plan == "free" else -1,
+        "active_subscription_count": count,
+        "free_limit": FREE_SUBSCRIPTION_LIMIT,
     }
 
 
 # ─────────────────────────────────────────────
-# PAYMENT ROUTES — One-Time
+# Subscription CRUD
 # ─────────────────────────────────────────────
-@app.post("/payment/create-order")
-async def create_order(order_req: OrderRequest):
+
+def _parse_date(date_str: str) -> datetime:
+    for fmt in ("%Y-%m-%d", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M:%S.%f"):
+        try:
+            return datetime.strptime(date_str[:19], fmt[:len(date_str[:19])])
+        except ValueError:
+            pass
     try:
-        order_data = {
-            "amount": order_req.amount,
-            "currency": order_req.currency,
-            "receipt": f"studyquizai_{int(time.time())}",
-            "notes": {
-                "plan_type": order_req.plan_type,
-                **(order_req.notes or {}),
-            },
-        }
-        order = razorpay_client.order.create(data=order_data)
-        return {
-            "status": "success",
-            "order_id": order["id"],
-            "amount": order["amount"],
-            "currency": order["currency"],
-            "key_id": RAZORPAY_KEY_ID,
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return datetime.fromisoformat(date_str.replace("Z", "+00:00").split("+")[0])
+    except Exception:
+        raise HTTPException(status_code=400, detail=f"Invalid date format: {date_str}")
 
 
-@app.post("/payment/verify-payment")
-async def verify_payment(
-    verification: PaymentVerification,
+@app.get("/api/subscriptions")
+def list_subscriptions(
+    active_only: bool = False,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db)
 ):
-    """Verify payment and upgrade user to Pro"""
-    try:
-        message = f"{verification.razorpay_order_id}|{verification.razorpay_payment_id}"
-        expected_signature = hmac.new(
-            RAZORPAY_KEY_SECRET.encode(),
-            message.encode(),
-            hashlib.sha256,
-        ).hexdigest()
+    q = db.query(Subscription).filter(Subscription.user_id == current_user.id)
+    if active_only:
+        q = q.filter(Subscription.is_active == True)
+    subs = q.order_by(Subscription.next_billing_date.asc()).all()
+    return [_sub_dict(s) for s in subs]
 
-        if expected_signature != verification.razorpay_signature:
-            raise HTTPException(status_code=400, detail="Payment verification failed")
 
-        # Check if payment already processed
-        existing_payment = db.query(Payment).filter(
-            Payment.razorpay_payment_id == verification.razorpay_payment_id
-        ).first()
-        
-        if existing_payment:
-            raise HTTPException(status_code=400, detail="Payment already verified")
+@app.post("/api/subscriptions", status_code=201)
+def create_subscription(
+    req: SubscriptionCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    active_count = db.query(Subscription).filter(
+        Subscription.user_id == current_user.id,
+        Subscription.is_active == True
+    ).count()
 
-        # Create payment record
-        payment = Payment(
-            user_id=current_user.id,
-            razorpay_order_id=verification.razorpay_order_id,
-            razorpay_payment_id=verification.razorpay_payment_id,
-            razorpay_signature=verification.razorpay_signature,
-            status="success",
+    if not current_user.can_add_subscription(active_count):
+        raise HTTPException(
+            status_code=403,
+            detail=f"Free plan limited to {FREE_SUBSCRIPTION_LIMIT} active subscriptions. Upgrade to Pro for unlimited."
         )
-        
-        # Update user subscription (set to 30 days premium)
-        current_user.plan = "monthly"
-        current_user.subscription_active = True
-        current_user.subscription_end_date = datetime.utcnow() + timedelta(days=30)
-        
-        db.add(payment)
-        db.commit()
-        db.refresh(current_user)
 
-        return {
-            "status": "success",
-            "message": "Payment verified! You are now a Pro user.",
-            "payment_id": verification.razorpay_payment_id,
-            "plan": current_user.plan,
-            "subscription_end_date": current_user.subscription_end_date,
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# ─────────────────────────────────────────────
-# PAYMENT ROUTES — Subscriptions
-# ─────────────────────────────────────────────
-@app.post("/payment/create-plan")
-async def create_plan():
-    """Run once to create plans. Or create from Razorpay Dashboard."""
-    try:
-        monthly = razorpay_client.plan.create({
-            "period": "monthly",
-            "interval": 1,
-            "item": {
-                "name": "StudyQuizAI Pro — Monthly",
-                "amount": 19900,  # ₹199/month
-                "currency": "INR",
-                "description": "Unlimited AI quiz generation",
-            },
-        })
-        yearly = razorpay_client.plan.create({
-            "period": "yearly",
-            "interval": 1,
-            "item": {
-                "name": "StudyQuizAI Pro — Yearly",
-                "amount": 149900,  # ₹1499/year
-                "currency": "INR",
-                "description": "Unlimited AI quiz generation — Annual",
-            },
-        })
-        return {
-            "monthly_plan_id": monthly["id"],
-            "yearly_plan_id": yearly["id"],
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/payment/create-subscription")
-async def create_subscription(sub_req: SubscriptionRequest):
-    try:
-        sub = razorpay_client.subscription.create({
-            "plan_id": sub_req.plan_id,
-            "total_count": sub_req.total_count,
-            "notes": sub_req.notes or {},
-        })
-        return {
-            "status": "success",
-            "subscription_id": sub["id"],
-            "key_id": RAZORPAY_KEY_ID,
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/payment/verify-subscription")
-async def verify_subscription(request: Request, verification: SubscriptionVerification):
-    try:
-        message = f"{verification.razorpay_payment_id}|{verification.razorpay_subscription_id}"
-        expected_signature = hmac.new(
-            RAZORPAY_KEY_SECRET.encode(),
-            message.encode(),
-            hashlib.sha256,
-        ).hexdigest()
-
-        if expected_signature == verification.razorpay_signature:
-            client_id = verification.user_id or get_client_ip(request)
-            pro_users.add(client_id)
-            return {
-                "status": "success",
-                "message": "Subscription verified! You are now a Pro user.",
-                "is_pro": True,
-            }
-        else:
-            raise HTTPException(status_code=400, detail="Subscription verification failed")
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# ─────────────────────────────────────────────
-# WEBHOOK
-# ─────────────────────────────────────────────
-@app.post("/payment/webhook")
-async def razorpay_webhook(request: Request):
-    try:
-        payload = await request.body()
-        signature = request.headers.get("X-Razorpay-Signature", "")
-        webhook_secret = os.getenv("RAZORPAY_WEBHOOK_SECRET", "your_webhook_secret")
-
-        expected = hmac.new(
-            webhook_secret.encode(), payload, hashlib.sha256
-        ).hexdigest()
-
-        if expected != signature:
-            raise HTTPException(status_code=400, detail="Invalid webhook signature")
-
-        event = json.loads(payload)
-        event_type = event.get("event")
-
-        if event_type == "payment.captured":
-            print(f"✅ Payment captured: {event['payload']['payment']['entity']['id']}")
-        elif event_type == "subscription.activated":
-            print(f"✅ Subscription activated: {event['payload']['subscription']['entity']['id']}")
-        elif event_type == "subscription.cancelled":
-            print(f"⚠️ Subscription cancelled: {event['payload']['subscription']['entity']['id']}")
-
-        return {"status": "ok"}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# ─────────────────────────────────────────────
-# VIDEO ROUTES — Script & Video Generation
-# ─────────────────────────────────────────────
-
-# In-memory video store (replace with DB in production)
-_video_store: list = []
-_video_id_counter: int = 1
-
-
-class ScriptRequest(BaseModel):
-    topic: str
-    niche: str = "motivation"
-    duration: int = 30      # seconds: 15, 30, 60
-    voice: str = "nova"
-    style: str = "cinematic"
-
-
-class VideoCreateRequest(BaseModel):
-    topic: str
-    niche: str = "motivation"
-    duration: int = 30
-    voice: str = "nova"
-    style: str = "cinematic"
-    script: Optional[str] = None  # optional pre-generated script
-
-
-@app.post("/videos/generate-script")
-async def api_generate_script(
-    req: ScriptRequest,
-    current_user: User = Depends(get_current_user),
-):
-    """Generate an AI video script for a given topic."""
-    result = generate_video_script(
-        topic=req.topic,
-        niche=req.niche,
-        duration=req.duration,
-        voice=req.voice,
-        style=req.style,
+    sub = Subscription(
+        user_id=current_user.id,
+        name=req.name,
+        category=req.category,
+        amount=req.amount,
+        currency=req.currency,
+        billing_cycle=req.billing_cycle,
+        next_billing_date=_parse_date(req.next_billing_date),
+        notes=req.notes,
+        color=req.color,
+        is_active=req.is_active,
     )
-    return {
-        "status": "success",
-        **result,
-    }
+    db.add(sub)
+    db.commit()
+    db.refresh(sub)
+    return _sub_dict(sub)
 
 
-@app.post("/videos/create")
-async def api_create_video(
-    req: VideoCreateRequest,
+@app.get("/api/subscriptions/{sub_id}")
+def get_subscription(
+    sub_id: int,
     current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
-    """
-    Create a new video job.
-    In a real production app this would queue a video rendering job.
-    Here we immediately 'complete' it with the generated script.
-    """
-    global _video_id_counter
-
-    # Generate script if not provided
-    if not req.script:
-        result = generate_video_script(
-            topic=req.topic,
-            niche=req.niche,
-            duration=req.duration,
-            voice=req.voice,
-            style=req.style,
-        )
-        script = result["script"]
-    else:
-        script = req.script
-
-    video = {
-        "id": _video_id_counter,
-        "user_id": current_user.id,
-        "topic": req.topic,
-        "niche": req.niche,
-        "duration": req.duration,
-        "voice": req.voice,
-        "style": req.style,
-        "script": script,
-        "status": "ready",
-        "views": 0,
-        "created_at": datetime.utcnow().isoformat(),
-    }
-    _video_store.append(video)
-    _video_id_counter += 1
-
-    return {"status": "success", "video": video}
+    sub = _get_sub_or_404(sub_id, current_user.id, db)
+    return _sub_dict(sub)
 
 
-@app.get("/videos")
-async def api_list_videos(
+@app.put("/api/subscriptions/{sub_id}")
+def update_subscription(
+    sub_id: int,
+    req: SubscriptionUpdate,
     current_user: User = Depends(get_current_user),
-    skip: int = 0,
-    limit: int = 20,
+    db: Session = Depends(get_db)
 ):
-    """List all videos for the authenticated user."""
-    user_videos = [v for v in _video_store if v["user_id"] == current_user.id]
-    user_videos.sort(key=lambda v: v["created_at"], reverse=True)
-    return {
-        "status": "success",
-        "videos": user_videos[skip : skip + limit],
-        "total": len(user_videos),
-    }
+    sub = _get_sub_or_404(sub_id, current_user.id, db)
+    if req.name is not None:
+        sub.name = req.name
+    if req.category is not None:
+        sub.category = req.category
+    if req.amount is not None:
+        sub.amount = req.amount
+    if req.currency is not None:
+        sub.currency = req.currency
+    if req.billing_cycle is not None:
+        sub.billing_cycle = req.billing_cycle
+    if req.next_billing_date is not None:
+        sub.next_billing_date = _parse_date(req.next_billing_date)
+    if req.notes is not None:
+        sub.notes = req.notes
+    if req.color is not None:
+        sub.color = req.color
+    if req.is_active is not None:
+        sub.is_active = req.is_active
+    sub.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(sub)
+    return _sub_dict(sub)
 
 
-@app.get("/videos/{video_id}")
-async def api_get_video(
-    video_id: int,
+@app.delete("/api/subscriptions/{sub_id}", status_code=204)
+def delete_subscription(
+    sub_id: int,
     current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
-    """Get a specific video by ID."""
-    video = next((v for v in _video_store if v["id"] == video_id), None)
-    if not video:
-        raise HTTPException(status_code=404, detail="Video not found")
-    if video["user_id"] != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized")
-    return {"status": "success", "video": video}
-
-
-@app.delete("/videos/{video_id}")
-async def api_delete_video(
-    video_id: int,
-    current_user: User = Depends(get_current_user),
-):
-    """Delete a video."""
-    global _video_store
-    video = next((v for v in _video_store if v["id"] == video_id), None)
-    if not video:
-        raise HTTPException(status_code=404, detail="Video not found")
-    if video["user_id"] != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized")
-    _video_store = [v for v in _video_store if v["id"] != video_id]
-    return {"status": "success", "message": "Video deleted"}
+    sub = _get_sub_or_404(sub_id, current_user.id, db)
+    db.delete(sub)
+    db.commit()
 
 
 # ─────────────────────────────────────────────
-# Health Check
+# Analytics
 # ─────────────────────────────────────────────
-@app.get("/health")
-async def health():
-    return {"status": "ok", "app": "ReelForge AI", "version": "3.0.0"}
+
+@app.get("/api/analytics")
+def get_analytics(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    subs = db.query(Subscription).filter(
+        Subscription.user_id == current_user.id,
+        Subscription.is_active == True
+    ).all()
+
+    monthly_total = sum(_monthly_cost(s) for s in subs)
+    yearly_total = monthly_total * 12
+
+    # By category
+    by_category = {}
+    for s in subs:
+        cost = _monthly_cost(s)
+        by_category[s.category] = by_category.get(s.category, 0) + cost
+
+    # Upcoming renewals (next 30 days)
+    now = datetime.utcnow()
+    in_30 = now + timedelta(days=30)
+    upcoming = [
+        _sub_dict(s) for s in subs
+        if s.next_billing_date and now <= s.next_billing_date <= in_30
+    ]
+    upcoming.sort(key=lambda x: x["next_billing_date"])
+
+    # Most expensive
+    sorted_subs = sorted(subs, key=lambda s: _monthly_cost(s), reverse=True)
+
+    return {
+        "monthly_total": round(monthly_total, 2),
+        "yearly_total": round(yearly_total, 2),
+        "active_count": len(subs),
+        "by_category": {k: round(v, 2) for k, v in by_category.items()},
+        "upcoming_renewals": upcoming[:5],
+        "most_expensive": [_sub_dict(s) for s in sorted_subs[:3]],
+    }
+
+
+# ─────────────────────────────────────────────
+# Payments (Razorpay)
+# ─────────────────────────────────────────────
+
+@app.post("/api/payments/create-order")
+def create_order(
+    req: OrderRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if not razorpay_client:
+        raise HTTPException(status_code=503, detail="Payment service not configured")
+    order = razorpay_client.order.create({
+        "amount": req.amount,
+        "currency": req.currency,
+        "payment_capture": 1,
+        "notes": {"user_id": str(current_user.id), "plan": req.plan_type},
+    })
+    payment = Payment(
+        user_id=current_user.id,
+        razorpay_order_id=order["id"],
+        plan=req.plan_type,
+        amount=req.amount / 100,
+        currency=req.currency,
+    )
+    db.add(payment)
+    db.commit()
+    return {"order_id": order["id"], "amount": req.amount, "currency": req.currency}
+
+
+@app.post("/api/payments/verify")
+def verify_payment(
+    req: PaymentVerification,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if not razorpay_client:
+        raise HTTPException(status_code=503, detail="Payment service not configured")
+    try:
+        razorpay_client.utility.verify_payment_signature({
+            "razorpay_order_id": req.razorpay_order_id,
+            "razorpay_payment_id": req.razorpay_payment_id,
+            "razorpay_signature": req.razorpay_signature,
+        })
+    except Exception:
+        raise HTTPException(status_code=400, detail="Payment verification failed")
+
+    payment = db.query(Payment).filter(Payment.razorpay_order_id == req.razorpay_order_id).first()
+    if payment:
+        payment.razorpay_payment_id = req.razorpay_payment_id
+        payment.razorpay_signature = req.razorpay_signature
+        payment.status = "success"
+
+    current_user.plan = "pro"
+    current_user.subscription_active = True
+    current_user.subscription_end_date = datetime.utcnow() + timedelta(days=365)
+    db.commit()
+    return {"success": True, "plan": "pro"}
+
+
+@app.post("/api/payments/webhook")
+async def payment_webhook(request: Request, db: Session = Depends(get_db)):
+    body = await request.body()
+    signature = request.headers.get("x-razorpay-signature", "")
+    if RAZORPAY_WEBHOOK_SECRET:
+        expected = hmac.new(
+            RAZORPAY_WEBHOOK_SECRET.encode(),
+            body,
+            hashlib.sha256
+        ).hexdigest()
+        if not hmac.compare_digest(expected, signature):
+            raise HTTPException(status_code=400, detail="Invalid webhook signature")
+    return {"status": "ok"}
+
+
+# ─────────────────────────────────────────────
+# Helpers
+# ─────────────────────────────────────────────
+
+def _get_sub_or_404(sub_id: int, user_id: int, db: Session) -> Subscription:
+    sub = db.query(Subscription).filter(
+        Subscription.id == sub_id,
+        Subscription.user_id == user_id
+    ).first()
+    if not sub:
+        raise HTTPException(status_code=404, detail="Subscription not found")
+    return sub
+
+
+def _monthly_cost(sub: Subscription) -> float:
+    if sub.billing_cycle == "yearly":
+        return sub.amount / 12
+    if sub.billing_cycle == "weekly":
+        return sub.amount * 4.33
+    return sub.amount  # monthly
+
+
+def _sub_dict(sub: Subscription) -> dict:
+    return {
+        "id": sub.id,
+        "name": sub.name,
+        "category": sub.category,
+        "amount": sub.amount,
+        "currency": sub.currency,
+        "billing_cycle": sub.billing_cycle,
+        "next_billing_date": sub.next_billing_date.isoformat() if sub.next_billing_date else None,
+        "start_date": sub.start_date.isoformat() if sub.start_date else None,
+        "is_active": sub.is_active,
+        "notes": sub.notes,
+        "color": sub.color,
+        "monthly_cost": round(_monthly_cost(sub), 2),
+        "created_at": sub.created_at.isoformat() if sub.created_at else None,
+    }

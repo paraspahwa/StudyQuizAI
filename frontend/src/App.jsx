@@ -5,42 +5,41 @@ import PricingPage from "./pages/PricingPage";
 import DashboardPage from "./pages/DashboardPage";
 
 /**
- * ReelForge AI — App Stage Manager
+ * SubTrack — App Stage Manager
  *
  * Stages:
  *   landing   → Marketing / home page
  *   auth      → Login / signup
  *   pricing   → Pricing page
- *   dashboard → Main app (create videos, gallery, analytics)
+ *   dashboard → Main app (subscriptions, analytics)
  */
 export default function App() {
   const [stage, setStage] = useState("landing");
   const [user, setUser] = useState(null);
   const [authMode, setAuthMode] = useState("login");
 
-  // Restore session on mount
   useEffect(() => {
-    const token = localStorage.getItem("rf_token");
-    const saved = localStorage.getItem("rf_user");
+    const token = localStorage.getItem("st_token");
+    const saved = localStorage.getItem("st_user");
     if (token && saved) {
       try {
         setUser(JSON.parse(saved));
         setStage("dashboard");
       } catch {
-        localStorage.removeItem("rf_token");
-        localStorage.removeItem("rf_user");
+        localStorage.removeItem("st_token");
+        localStorage.removeItem("st_user");
       }
     }
   }, []);
 
   const handleAuthSuccess = (data) => {
-    setUser({ id: data.user_id, email: data.email, name: data.full_name });
+    setUser({ id: data.user_id, email: data.email, name: data.full_name, plan: data.plan });
     setStage("dashboard");
   };
 
   const handleLogout = () => {
-    localStorage.removeItem("rf_token");
-    localStorage.removeItem("rf_user");
+    localStorage.removeItem("st_token");
+    localStorage.removeItem("st_user");
     setUser(null);
     setStage("landing");
   };
@@ -75,10 +74,12 @@ export default function App() {
 
       {stage === "pricing" && (
         <PricingPage
-          onBack={() => setStage("landing")}
+          onBack={() => setStage(user ? "dashboard" : "landing")}
           onGetStarted={goToSignup}
+          user={user}
           onSuccess={(result) => {
             if (user) {
+              setUser(prev => ({ ...prev, plan: "pro" }));
               setStage("dashboard");
             } else {
               goToSignup();
